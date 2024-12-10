@@ -92,26 +92,37 @@ with st.sidebar:
     )
     
     st.header("Team Structure")
+    # LO Count inputs
     level1_count = st.number_input("Level 1 LO Count", value=10, min_value=0)
     level2_count = st.number_input("Level 2 LO Count", value=20, min_value=0)
     level3_count = st.number_input("Level 3 LO Count", value=30, min_value=0)
+    
+    # New section for LO Units
+    st.header("LO Units")
+    level1_units = st.number_input("Level 1 Units", value=200, min_value=0)
+    level2_units = st.number_input("Level 2 Units", value=480, min_value=0)
+    level3_units = st.number_input("Level 3 Units", value=510, min_value=0)
+    
+    # Average Loan Size
+    st.header("Loan Parameters")
+    avg_loan_size = st.number_input("Average Loan Size ($)", value=445000, min_value=0, step=1000)
 
 if user_name:
     # Main calculation area
     st.header(f"Revenue Share Analysis for {user_name}")
     
-    # Level calculations
+    # Level calculations - now using adjustable units
     levels_data = {
-        'Level 1': {'units': 200},
-        'Level 2': {'units': 480},
-        'Level 3': {'units': 510}
+        'Level 1': {'units': level1_units},
+        'Level 2': {'units': level2_units},
+        'Level 3': {'units': level3_units}
     }
     
     all_results = []
     total_rev_share = 0
     
     for level, data in levels_data.items():
-        results = calculate_rev_share(selected_title, level, data['units'])
+        results = calculate_rev_share(selected_title, level, data['units'], avg_loan_size=avg_loan_size)
         all_results.append({
             'Level': level,
             'Units': data['units'],
@@ -122,7 +133,7 @@ if user_name:
             'Rev Share': results['rev_share']
         })
         total_rev_share += results['rev_share']
-    
+        
     # Display results
     col1, col2 = st.columns([2, 1])
     
