@@ -167,7 +167,7 @@ def create_detailed_pdf_report(user_name, selected_title, all_results, total_rev
         summary_data = [
             ['Title', selected_title],
             ['Total Revenue Share', f"${int(total_rev_share):,}"],
-            ['Total Units', sum(r['Total Units'] for r in all_results)],
+            ['Total Loans', sum(r['Total Loans'] for r in all_results)],
             ['Total Volume', f"${int(sum(r['Volume'] for r in all_results)):,}"]
         ]
         if has_profit_share:
@@ -207,13 +207,13 @@ def create_detailed_pdf_report(user_name, selected_title, all_results, total_rev
             detail_data = [
                 ['Metric', 'Value'],
                 ['LO Count', str(result['LO Count'])],
-                ['Units per LO', str(result['Units per LO'])],
-                ['Total Units', str(result['Total Units'])],
+                ['Loans per LO', str(result['Loans per LO'])],
+                ['Total Loans', str(result['Total Loans'])],
                 ['Volume', f"${int(result['Volume']):,}"],
                 ['Commissionable Volume', f"${int(result['Commissionable Volume']):,}"],
-                ['Base Bonus Rate', f"{result['Bonus Rate']*100:.2f}%"],
+                ['Level Bonus Rate', f"{result['Bonus Rate']*100:.2f}%"],
                 ['Generational Bonus', f"{result['Gen Bonus']*100:.2f}%"],
-                ['Total Bonus Rate', f"{(result['Bonus Rate'] + result['Gen Bonus'])*100:.2f}%"],
+                # ['Total Bonus Rate', f"{(result['Bonus Rate'] + result['Gen Bonus'])*100:.2f}%"],
                 ['Revenue Share', f"${int(result['Rev Share']):,}"]
             ]
             
@@ -280,7 +280,7 @@ with st.sidebar:
     with col1_l1:
         level1_count = st.number_input("LO Count", value=10, min_value=0, key="l1_count")
     with col2_l1:
-        level1_units_per_lo = st.number_input("Units per LO", value=10, min_value=0, key="l1_units")
+        level1_units_per_lo = st.number_input("Loans per LO", value=10, min_value=0, key="l1_units")
     
     # Level 2
     st.subheader("Level 2")
@@ -288,7 +288,7 @@ with st.sidebar:
     with col1_l2:
         level2_count = st.number_input("LO Count", value=20, min_value=0, key="l2_count")
     with col2_l2:
-        level2_units_per_lo = st.number_input("Units per LO", value=20, min_value=0, key="l2_units")
+        level2_units_per_lo = st.number_input("Loans per LO", value=20, min_value=0, key="l2_units")
     
     # Level 3
     st.subheader("Level 3")
@@ -296,7 +296,7 @@ with st.sidebar:
     with col1_l3:
         level3_count = st.number_input("LO Count", value=30, min_value=0, key="l3_count")
     with col2_l3:
-        level3_units_per_lo = st.number_input("Units per LO", value=30, min_value=0, key="l3_units")
+        level3_units_per_lo = st.number_input("Loans per LO", value=30, min_value=0, key="l3_units")
     
     # Loan Parameters
     st.header("Loan Parameters")
@@ -334,8 +334,8 @@ if user_name:
         all_results.append({
             'Level': level,
             'LO Count': level1_count if level == 'Level 1' else level2_count if level == 'Level 2' else level3_count,
-            'Units per LO': level1_units_per_lo if level == 'Level 1' else level2_units_per_lo if level == 'Level 2' else level3_units_per_lo,
-            'Total Units': data['units'],
+            'Loans per LO': level1_units_per_lo if level == 'Level 1' else level2_units_per_lo if level == 'Level 2' else level3_units_per_lo,
+            'Total Loans': data['units'],
             'Volume': results['volume'],
             'Commissionable Volume': results['commissionable_volume'],
             'Bonus Rate': results['bonus_rate'],  # Changed from string format to raw number
@@ -372,11 +372,11 @@ if user_name:
         for result in all_results:
             with st.expander(result['Level'], expanded=True):
                 st.write(f"LO Count: {result['LO Count']}")
-                st.write(f"Units per LO: {result['Units per LO']}")
-                st.write(f"Total Units: {result['Total Units']}")
+                st.write(f"Loans per LO: {result['Loans per LO']}")
+                st.write(f"Total Loans: {result['Total Loans']}")
                 st.write(f"Volume: ${int(result['Volume']):,}")
                 st.write(f"Commissionable Volume: ${int(result['Commissionable Volume']):,}")
-                st.write(f"Base Bonus Rate: {result['Bonus Rate']*100:.2f}%")
+                st.write(f"Level Bonus Rate: {result['Bonus Rate']*100:.2f}%")
                 st.write(f"Generational Bonus: {result['Gen Bonus']*100:.2f}%")
                 st.write(f"Total Bonus Rate: {(result['Bonus Rate'] + result['Gen Bonus'])*100:.2f}%")
                 st.write(f"Rev Share: ${int(result['Rev Share']):,}")
