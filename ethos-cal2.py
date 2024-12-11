@@ -338,8 +338,8 @@ if user_name:
             'Total Units': data['units'],
             'Volume': results['volume'],
             'Commissionable Volume': results['commissionable_volume'],
-            'Bonus Rate': f"{results['bonus_rate']*100:.2f}%",
-            'Generation Bonus': "0.01%",
+            'Bonus Rate': results['bonus_rate'],  # Changed from string format to raw number
+            'Gen Bonus': results['gen_bonus'],    # Added to match with calculate_rev_share
             'Rev Share': results['rev_share']
         })
         total_rev_share += results['rev_share']
