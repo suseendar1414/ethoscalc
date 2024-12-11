@@ -376,8 +376,9 @@ if user_name:
                 st.write(f"Total Units: {result['Total Units']}")
                 st.write(f"Volume: ${int(result['Volume']):,}")
                 st.write(f"Commissionable Volume: ${int(result['Commissionable Volume']):,}")
-                st.write(f"Bonus Rate: {result['Bonus Rate']}")
-                st.write(f"Generation Bonus: {result['Generation Bonus']}")
+                st.write(f"Base Bonus Rate: {result['Bonus Rate']*100:.2f}%")
+                st.write(f"Generational Bonus: {result['Gen Bonus']*100:.2f}%")
+                st.write(f"Total Bonus Rate: {(result['Bonus Rate'] + result['Gen Bonus'])*100:.2f}%")
                 st.write(f"Rev Share: ${int(result['Rev Share']):,}")
     
     # Profit Sharing Section
