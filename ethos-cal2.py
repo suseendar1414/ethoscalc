@@ -12,86 +12,117 @@ from PIL import Image as PILImage
 
 st.set_page_config(page_title="Revenue Share Calculator", layout="wide")
 
-# Title bonus rates
+# Updated bonus rates
 TITLE_BONUS_RATES = {
     'Ambassador (AMB)': {
-        'level1_bonus': 0.0008,
+        'level1_bonus': 0.0005,
         'level2_bonus': 0,
         'level3_bonus': 0,
-        'has_profit_share': False
+        'level1_gen_bonus': 0,
+        'level2_gen_bonus': 0,
+        'level3_gen_bonus': 0,
+        'has_profit_share': False,
+        'profit_share_bonus': 0
     },
     'Active Ambassador (AAMB)': {
         'level1_bonus': 0.001,
         'level2_bonus': 0,
         'level3_bonus': 0,
-        'has_profit_share': False
+        'level1_gen_bonus': 0,
+        'level2_gen_bonus': 0,
+        'level3_gen_bonus': 0,
+        'has_profit_share': False,
+        'profit_share_bonus': 0
     },
     'Ambassador 2 (AMB2)': {
         'level1_bonus': 0.001,
-        'level2_bonus': 0.0007,
+        'level2_bonus': 0.0005,
         'level3_bonus': 0,
-        'has_profit_share': False
+        'level1_gen_bonus': 0,
+        'level2_gen_bonus': 0,
+        'level3_gen_bonus': 0,
+        'has_profit_share': False,
+        'profit_share_bonus': 0
     },
     'Ambassador 3 (AMB3)': {
         'level1_bonus': 0.001,
         'level2_bonus': 0.0007,
         'level3_bonus': 0.0005,
-        'has_profit_share': False
+        'level1_gen_bonus': 0,
+        'level2_gen_bonus': 0,
+        'level3_gen_bonus': 0,
+        'has_profit_share': False,
+        'profit_share_bonus': 0
     },
     'Director 1 (DIR1)': {
         'level1_bonus': 0.001,
         'level2_bonus': 0.001,
         'level3_bonus': 0.0007,
-        'has_profit_share': False
+        'level1_gen_bonus': 0.0001,
+        'level2_gen_bonus': 0,
+        'level3_gen_bonus': 0,
+        'has_profit_share': False,
+        'profit_share_bonus': 0
     },
     'Director 2 (DIR2)': {
         'level1_bonus': 0.001,
         'level2_bonus': 0.001,
         'level3_bonus': 0.0007,
-        'has_profit_share': False
+        'level1_gen_bonus': 0.0001,
+        'level2_gen_bonus': 0.0001,
+        'level3_gen_bonus': 0,
+        'has_profit_share': False,
+        'profit_share_bonus': 0
     },
     'Director 3 (DIR3)': {
         'level1_bonus': 0.001,
         'level2_bonus': 0.001,
         'level3_bonus': 0.0007,
-        'has_profit_share': True
+        'level1_gen_bonus': 0.0001,
+        'level2_gen_bonus': 0.0001,
+        'level3_gen_bonus': 0.0001,
+        'has_profit_share': True,
+        'profit_share_bonus': 0.0001
     }
 }
 
-def calculate_rev_share(title, level, units, avg_loan_size=445000, generation_bonus=0.0001):
+def calculate_rev_share(title, level, units, avg_loan_size=445000):
     rates = TITLE_BONUS_RATES[title]
     volume = units * avg_loan_size
-    commissionable_volume = volume * 0.80
+    commissionable_volume = volume * 0.80  # 80% of volume is commissionable
     
+    # Get base bonus rate and generational bonus for the specific level
     if level == 'Level 1':
         bonus_rate = rates['level1_bonus']
+        gen_bonus = rates['level1_gen_bonus']
     elif level == 'Level 2':
         bonus_rate = rates['level2_bonus']
+        gen_bonus = rates['level2_gen_bonus']
     else:
         bonus_rate = rates['level3_bonus']
+        gen_bonus = rates['level3_gen_bonus']
     
-    rev_share = commissionable_volume * (bonus_rate + generation_bonus)
+    # Calculate revenue share including both base bonus and generational bonus
+    rev_share = commissionable_volume * (bonus_rate + gen_bonus)
     
     return {
         'volume': volume,
         'commissionable_volume': commissionable_volume,
         'rev_share': rev_share,
-        'bonus_rate': bonus_rate
+        'bonus_rate': bonus_rate,
+        'gen_bonus': gen_bonus
     }
 
 def calculate_profit_sharing(company_volume=2136000000):
-    profit_sharing_rate = 0.0001
-    profit_sharing_share = 0.25
+    profit_sharing_rate = 0.0001  # 0.01%
+    profit_sharing_share = 0.25   # 25%
     return company_volume * profit_sharing_rate * profit_sharing_share
 
 def create_chart_image(fig):
     """Convert Plotly figure to image bytes for PDF"""
     try:
-        # Convert plot to image bytes
         img_bytes = fig.to_image(format="png", width=800, height=400)
-        # Create image object from bytes
         img = PILImage.open(io.BytesIO(img_bytes))
-        # Convert PIL image to reportlab image
         img_buffer = io.BytesIO()
         img.save(img_buffer, format='PNG')
         img_buffer.seek(0)
@@ -158,17 +189,21 @@ def create_detailed_pdf_report(user_name, selected_title, all_results, total_rev
     # Revenue Chart Section
     if report_type == 'detailed' and (not selected_sections or 'revenue_chart' in selected_sections):
         elements.append(Paragraph("Revenue Distribution by Level", section_style))
-        chart_img = create_chart_image(chart_fig)
-        elements.append(chart_img)
-        elements.append(Spacer(1, 20))
+        try:
+            chart_img = create_chart_image(chart_fig)
+            if chart_img:
+                elements.append(chart_img)
+            elements.append(Spacer(1, 20))
+        except Exception as e:
+            print(f"Error adding chart to PDF: {e}")
+            elements.append(Paragraph("Chart could not be generated", styles['Normal']))
+            elements.append(Spacer(1, 20))
     
     # Detailed Breakdown Section
     if report_type == 'detailed' and (not selected_sections or 'level_breakdown' in selected_sections):
         elements.append(Paragraph("Detailed Level Breakdown", section_style))
-        
         for result in all_results:
             elements.append(Paragraph(f"{result['Level']} Analysis", styles['Heading3']))
-            
             detail_data = [
                 ['Metric', 'Value'],
                 ['LO Count', str(result['LO Count'])],
@@ -176,8 +211,9 @@ def create_detailed_pdf_report(user_name, selected_title, all_results, total_rev
                 ['Total Units', str(result['Total Units'])],
                 ['Volume', f"${int(result['Volume']):,}"],
                 ['Commissionable Volume', f"${int(result['Commissionable Volume']):,}"],
-                ['Bonus Rate', result['Bonus Rate']],
-                ['Generation Bonus', result['Generation Bonus']],
+                ['Base Bonus Rate', f"{result['Bonus Rate']*100:.2f}%"],
+                ['Generational Bonus', f"{result['Gen Bonus']*100:.2f}%"],
+                ['Total Bonus Rate', f"{(result['Bonus Rate'] + result['Gen Bonus'])*100:.2f}%"],
                 ['Revenue Share', f"${int(result['Rev Share']):,}"]
             ]
             
