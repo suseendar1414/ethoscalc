@@ -1,128 +1,229 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import plotly.express as px
 
-# Set page config at the very beginning
-st.set_page_config(
-    page_title="Ethos Lending Revenue Share Calculator",
-    page_icon="💰",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Revenue Share Calculator", layout="wide")
 
-# Initialize session state if not exists
-if 'init' not in st.session_state:
-    st.session_state.init = True
-    st.session_state.total_rev_share = 0
-    st.session_state.total_volume = 0
+# Title bonus rates remain the same
+TITLE_BONUS_RATES = {
+    'Ambassador (AMB)': {
+        'level1_bonus': 0.0008,
+        'level2_bonus': 0,
+        'level3_bonus': 0,
+        'has_profit_share': False
+    },
+    'Active Ambassador (AAMB)': {
+        'level1_bonus': 0.001,
+        'level2_bonus': 0,
+        'level3_bonus': 0,
+        'has_profit_share': False
+    },
+    'Ambassador 2 (AMB2)': {
+        'level1_bonus': 0.001,
+        'level2_bonus': 0.0007,
+        'level3_bonus': 0,
+        'has_profit_share': False
+    },
+    'Ambassador 3 (AMB3)': {
+        'level1_bonus': 0.001,
+        'level2_bonus': 0.0007,
+        'level3_bonus': 0.0005,
+        'has_profit_share': False
+    },
+    'Director 1 (DIR1)': {
+        'level1_bonus': 0.001,
+        'level2_bonus': 0.001,
+        'level3_bonus': 0.0007,
+        'has_profit_share': False
+    },
+    'Director 2 (DIR2)': {
+        'level1_bonus': 0.001,
+        'level2_bonus': 0.001,
+        'level3_bonus': 0.0007,
+        'has_profit_share': False
+    },
+    'Director 3 (DIR3)': {
+        'level1_bonus': 0.001,
+        'level2_bonus': 0.001,
+        'level3_bonus': 0.0007,
+        'has_profit_share': True
+    }
+}
 
-def calculate_level_rev_share(lo_count, units, volume, bonus_percent, generation_bonus):
-    """Calculate revenue share for a specific level"""
-    try:
-        base_rev_share = float(volume) * float(bonus_percent)
-        generation_bonus_amount = float(volume) * float(generation_bonus)
-        return base_rev_share + generation_bonus_amount
-    except Exception as e:
-        st.error(f"Calculation error: {str(e)}")
-        return 0
+def calculate_rev_share(title, level, units, avg_loan_size=445000, generation_bonus=0.0001):
+    rates = TITLE_BONUS_RATES[title]
+    volume = units * avg_loan_size
+    commissionable_volume = volume * 0.80  # 80% of volume is commissionable
+    
+    if level == 'Level 1':
+        bonus_rate = rates['level1_bonus']
+    elif level == 'Level 2':
+        bonus_rate = rates['level2_bonus']
+    else:
+        bonus_rate = rates['level3_bonus']
+    
+    rev_share = commissionable_volume * (bonus_rate + generation_bonus)
+    
+    return {
+        'volume': volume,
+        'commissionable_volume': commissionable_volume,
+        'rev_share': rev_share,
+        'bonus_rate': bonus_rate
+    }
 
-def calculate_profit_sharing_bonus(company_lo_count, annual_units_per_lo, avg_loan_size, profit_sharing_percent, share_max):
-    """Calculate profit sharing bonus"""
-    try:
-        company_volume = float(company_lo_count) * float(annual_units_per_lo) * float(avg_loan_size)
-        total_bonus = company_volume * float(profit_sharing_percent)
-        return total_bonus * (float(share_max) / 100)
-    except Exception as e:
-        st.error(f"Calculation error: {str(e)}")
-        return 0
+def calculate_profit_sharing(company_volume=2136000000):
+    profit_sharing_rate = 0.0001  # 0.01%
+    profit_sharing_share = 0.25   # 25%
+    return company_volume * profit_sharing_rate * profit_sharing_share
 
-def main():
-    try:
-        st.title("Ethos Lending Revenue Share Calculator")
-        
-        # Sidebar with company branding
-        with st.sidebar:
-            st.header("Basic Information")
-            ambassador_name = st.text_input("Ambassador Name", key='ambassador_name')
-            paid_as_title = st.text_input("Paid-As Title", value="DIR3", key='paid_as_title')
-            frontline_legs = st.number_input("Frontline Legs", value=10, min_value=0, key='frontline_legs')
-            team_loans = st.number_input("Team Loans", value=1190, min_value=0, key='team_loans')
-        
-        # Create columns for better layout
-        col1, col2 = st.columns(2)
-        
-        # Level 1 Calculations
-        with col1:
-            st.subheader("Level 1 Revenue Share")
-            l1_lo_count = st.number_input("Level 1 LO Count", value=10, min_value=0, key="l1_lo")
-            l1_units = st.number_input("Level 1 Units", value=200, min_value=0, key="l1_units")
-            l1_volume = st.number_input("Level 1 Revenue Share Volume", value=61200000, min_value=0, key="l1_volume")
-            l1_bonus = st.number_input("Level 1 Bonus %", value=0.001, format="%.3f", key="l1_bonus")
-            l1_gen_bonus = st.number_input("Level 1 Generation Bonus %", value=0.0001, format="%.4f", key="l1_gen")
+# User Interface
+st.title("🏦 Ethos Lending Revenue Share Calculator")
+
+# Sidebar inputs
+with st.sidebar:
+    st.header("User Profile")
+    user_name = st.text_input("Enter Your Name")
+    
+    st.header("Title Selection")
+    selected_title = st.selectbox(
+        "Select Your Title", 
+        options=list(TITLE_BONUS_RATES.keys()),
+        index=6  # Default to DIR3
+    )
+    
+    st.header("Team Structure")
+    
+    # LO Count and Units per LO for each level
+    st.subheader("Level 1")
+    col1_l1, col2_l1 = st.columns(2)
+    with col1_l1:
+        level1_count = st.number_input("LO Count", value=10, min_value=0, key="l1_count")
+    with col2_l1:
+        level1_units_per_lo = st.number_input("Units per LO", value=10, min_value=0, key="l1_units")
+    
+    st.subheader("Level 2")
+    col1_l2, col2_l2 = st.columns(2)
+    with col1_l2:
+        level2_count = st.number_input("LO Count", value=20, min_value=0, key="l2_count")
+    with col2_l2:
+        level2_units_per_lo = st.number_input("Units per LO", value=20, min_value=0, key="l2_units")
+    
+    st.subheader("Level 3")
+    col1_l3, col2_l3 = st.columns(2)
+    with col1_l3:
+        level3_count = st.number_input("LO Count", value=30, min_value=0, key="l3_count")
+    with col2_l3:
+        level3_units_per_lo = st.number_input("Units per LO", value=30, min_value=0, key="l3_units")
+    
+    # Average Loan Size
+    st.header("Loan Parameters")
+    avg_loan_size = st.number_input("Average Loan Size ($)", value=445000, min_value=0, step=1000)
+
+    # Display calculated total units
+    st.header("Calculated Total Units")
+    level1_total_units = level1_count * level1_units_per_lo
+    level2_total_units = level2_count * level2_units_per_lo
+    level3_total_units = level3_count * level3_units_per_lo
+    
+    st.info(f"""
+    Level 1: {level1_total_units} units ({level1_count} LOs × {level1_units_per_lo} units)
+    Level 2: {level2_total_units} units ({level2_count} LOs × {level2_units_per_lo} units)
+    Level 3: {level3_total_units} units ({level3_count} LOs × {level3_units_per_lo} units)
+    Total: {level1_total_units + level2_total_units + level3_total_units} units
+    """)
+
+if user_name:
+    # Main calculation area
+    st.header(f"Revenue Share Analysis for {user_name}")
+    
+    # Level calculations using adjustable units
+    levels_data = {
+        'Level 1': {'units': level1_count * level1_units_per_lo},
+        'Level 2': {'units': level2_count * level2_units_per_lo},
+        'Level 3': {'units': level3_count * level3_units_per_lo}
+    }
+    
+    all_results = []
+    total_rev_share = 0
+    
+    for level, data in levels_data.items():
+        results = calculate_rev_share(selected_title, level, data['units'], avg_loan_size=avg_loan_size)
+        all_results.append({
+            'Level': level,
+            'LO Count': level1_count if level == 'Level 1' else level2_count if level == 'Level 2' else level3_count,
+            'Units per LO': level1_units_per_lo if level == 'Level 1' else level2_units_per_lo if level == 'Level 2' else level3_units_per_lo,
+            'Total Units': data['units'],
+            'Volume': results['volume'],
+            'Commissionable Volume': results['commissionable_volume'],
+            'Bonus Rate': f"{results['bonus_rate']*100:.2f}%",
+            'Generation Bonus': "0.01%",
+            'Rev Share': results['rev_share']
+        })
+        total_rev_share += results['rev_share']
+    
+    # Display results
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Summary metrics
+        metrics_cols = st.columns(2)
+        with metrics_cols[0]:
+            st.metric("Total Revenue Share", f"${int(total_rev_share):,}")
+        with metrics_cols[1]:
+            st.metric("Selected Title", selected_title)
             
-            l1_rev_share = calculate_level_rev_share(l1_lo_count, l1_units, l1_volume, l1_bonus, l1_gen_bonus)
-            st.metric("Level 1 Revenue Share", f"${l1_rev_share:,.2f}")
+        # Create DataFrame for display
+        df = pd.DataFrame(all_results)
         
-        # Level 2 Calculations
-        with col2:
-            st.subheader("Level 2 Revenue Share")
-            l2_lo_count = st.number_input("Level 2 LO Count", value=20, min_value=0, key="l2_lo")
-            l2_units = st.number_input("Level 2 Units", value=480, min_value=0, key="l2_units")
-            l2_volume = st.number_input("Level 2 Revenue Share Volume", value=121200000, min_value=0, key="l2_volume")
-            l2_bonus = st.number_input("Level 2 Bonus %", value=0.001, format="%.3f", key="l2_bonus")
-            l2_gen_bonus = st.number_input("Level 2 Generation Bonus %", value=0.0001, format="%.4f", key="l2_gen")
-            
-            l2_rev_share = calculate_level_rev_share(l2_lo_count, l2_units, l2_volume, l2_bonus, l2_gen_bonus)
-            st.metric("Level 2 Revenue Share", f"${l2_rev_share:,.2f}")
-        
-        # Level 3 and Profit Sharing
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            st.subheader("Level 3 Revenue Share")
-            l3_lo_count = st.number_input("Level 3 LO Count", value=30, min_value=0, key="l3_lo")
-            l3_units = st.number_input("Level 3 Units", value=510, min_value=0, key="l3_units")
-            l3_volume = st.number_input("Level 3 Revenue Share Volume", value=181050000, min_value=0, key="l3_volume")
-            l3_bonus = st.number_input("Level 3 Bonus %", value=0.0007, format="%.4f", key="l3_bonus")
-            l3_gen_bonus = st.number_input("Level 3 Generation Bonus %", value=0.0001, format="%.4f", key="l3_gen")
-            
-            l3_rev_share = calculate_level_rev_share(l3_lo_count, l3_units, l3_volume, l3_bonus, l3_gen_bonus)
-            st.metric("Level 3 Revenue Share", f"${l3_rev_share:,.2f}")
-        
+        # Revenue share chart
+        fig = px.bar(
+            df,
+            x='Level',
+            y='Rev Share',
+            title='Revenue Share by Level',
+            text=df['Rev Share'].apply(lambda x: f"${int(x):,}")
+        )
+        fig.update_traces(textposition='outside')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.header("Level Details")
+        for result in all_results:
+            with st.expander(result['Level'], expanded=True):
+                st.write(f"LO Count: {result['LO Count']}")
+                st.write(f"Units per LO: {result['Units per LO']}")
+                st.write(f"Total Units: {result['Total Units']}")
+                st.write(f"Volume: ${int(result['Volume']):,}")
+                st.write(f"Commissionable Volume: ${int(result['Commissionable Volume']):,}")
+                st.write(f"Bonus Rate: {result['Bonus Rate']}")
+                st.write(f"Generation Bonus: {result['Generation Bonus']}")
+                st.write(f"Rev Share: ${int(result['Rev Share']):,}")
+    
+    # Profit Sharing Section
+    st.write("---")
+    if TITLE_BONUS_RATES[selected_title]['has_profit_share']:
+        st.header("Profit Sharing")
+        profit_sharing = calculate_profit_sharing()
+        st.metric("Profit Sharing Bonus", f"${int(profit_sharing):,}")
+    
+    # Final metrics (showing separately)
+    st.write("---")
+    col3, col4 = st.columns(2)
+    with col3:
+        st.header("Revenue Share Total")
+        st.metric("Total Revenue Share", f"${int(total_rev_share):,}")
+    
+    if TITLE_BONUS_RATES[selected_title]['has_profit_share']:
         with col4:
-            st.subheader("Profit Sharing Bonus")
-            company_lo_count = st.number_input("Company LO Count", value=200, min_value=0)
-            annual_units_per_lo = st.number_input("Annual Units per LO", value=24, min_value=0)
-            avg_loan_size = st.number_input("Average Loan Size", value=400000, min_value=0)
-            profit_sharing_percent = st.number_input("Profit Sharing %", value=0.0001, format="%.4f")
-            share_max = st.number_input("Share Max %", value=25.0, min_value=0.0, max_value=100.0)
-            
-            profit_sharing_bonus = calculate_profit_sharing_bonus(
-                company_lo_count, 
-                annual_units_per_lo, 
-                avg_loan_size, 
-                profit_sharing_percent, 
-                share_max
-            )
-            st.metric("Profit Sharing Bonus", f"${profit_sharing_bonus:,.2f}")
-        
-        # Summary section
-        st.divider()
-        st.header("Summary")
-        total_rev_share = l1_rev_share + l2_rev_share + l3_rev_share + profit_sharing_bonus
-        total_volume = l1_volume + l2_volume + l3_volume
-        
-        col5, col6 = st.columns(2)
-        with col5:
-            st.metric("Total Revenue Share", f"${total_rev_share:,.2f}")
-        with col6:
-            st.metric("Total Revenue Share Volume", f"${total_volume:,.2f}")
-
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        st.error(f"Application error: {str(e)}")
+            st.header("Profit Share")
+            st.metric("Profit Sharing Amount", f"${int(profit_sharing):,}")
+    
+    # Download results
+    st.download_button(
+        "Download Results",
+        df.to_csv(index=False),
+        f"revenue_share_{user_name.lower().replace(' ', '_')}.csv",
+        "text/csv"
+    )
+else:
+    st.info("👆 Please enter your name in the sidebar to view your revenue share calculations")
