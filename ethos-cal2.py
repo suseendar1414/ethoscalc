@@ -89,11 +89,9 @@ TITLE_BONUS_RATES = {
 }
 
 def calculate_compensation(loan_amount, interest_rate, rebate, upline_contribution, transaction_fee, annual_units):
-    gross_comp = loan_amount * (rebate/100)
-    upline_fee = gross_comp * (upline_contribution/100)
-    net_comp = gross_comp - upline_fee - transaction_fee
+    net_comp = loan_amount * (rebate/100) * (1 - upline_contribution/100) - transaction_fee
     annual_comp = net_comp * annual_units
-    return gross_comp, net_comp, annual_comp
+    return net_comp, annual_comp
 
 def create_monthly_projection(annual_units, net_comp_per_loan):
     monthly_units = annual_units / 12
@@ -461,13 +459,11 @@ if calculator_type == "Revenue Share Calculator":
 else:  # Loan Advisor Compensation Calculator
     st.title("💰 Loan Advisor Compensation Calculator")
     
-    # Create tabs
     tab1, tab2 = st.tabs(["Calculator", "Monthly Projections"])
     
     with tab1:
         st.write("Compare your compensation between current lender and ETHOS")
         
-        # Input parameters with improved layout and tooltips
         col1, col2 = st.columns(2)
         
         with col1:
@@ -500,14 +496,14 @@ else:  # Loan Advisor Compensation Calculator
             current_rebate = st.number_input(
                 "Current Rebate (%)", 
                 min_value=0.0, 
-                value=1.5, 
+                value=1.0, 
                 step=0.1,
                 help="Current lender's rebate percentage"
             )
             company_split = st.number_input(
                 "Company Split (%)", 
                 min_value=0.0, 
-                value=10.0, 
+                value=0.0, 
                 step=0.1,
                 help="Percentage split with current company"
             )
@@ -529,17 +525,17 @@ else:  # Loan Advisor Compensation Calculator
         before_cap_units = min(annual_units, cap_units)
 
         # Calculate compensations
-        current_gross, current_net, current_annual = calculate_compensation(
+        current_net, current_annual = calculate_compensation(
             loan_amount, interest_rate, current_rebate, company_split, 
             current_transaction_fee, annual_units
         )
 
-        ethos_before_gross, ethos_before_net, ethos_before_annual = calculate_compensation(
+        ethos_before_net, ethos_before_annual = calculate_compensation(
             loan_amount, interest_rate, ethos_rebate, ethos_before_upline, 
             ethos_transaction_fee, before_cap_units
         )
 
-        ethos_after_gross, ethos_after_net, ethos_after_annual = calculate_compensation(
+        ethos_after_net, ethos_after_annual = calculate_compensation(
             loan_amount, interest_rate, ethos_rebate, ethos_after_upline, 
             ethos_transaction_fee, remaining_units
         )
@@ -550,15 +546,14 @@ else:  # Loan Advisor Compensation Calculator
         # Enhanced Results display
         st.header("Compensation Comparison")
         
-        comp_cols = st.columns(3)
+        comp_cols = st.columns(4)
         
         with comp_cols[0]:
             st.subheader("Current Lender")
             metrics_current = {
-                "Gross Comp per Loan": current_gross,
                 "Net Comp per Loan": current_net,
-                "Annual Compensation": current_annual,
-                "Monthly Average": current_annual/12
+                "Monthly Average": current_annual/12,
+                "Annual Compensation": current_annual
             }
             for label, value in metrics_current.items():
                 st.metric(label, f"${value:,.2f}")
@@ -566,10 +561,9 @@ else:  # Loan Advisor Compensation Calculator
         with comp_cols[1]:
             st.subheader("ETHOS (Before Cap)")
             metrics_before = {
-                "Gross Comp per Loan": ethos_before_gross,
                 "Net Comp per Loan": ethos_before_net,
-                "Compensation": ethos_before_annual,
-                "Monthly Average": ethos_before_annual/12
+                "Monthly Average": ethos_before_annual/12,
+                "Compensation": ethos_before_annual
             }
             for label, value in metrics_before.items():
                 st.metric(label, f"${value:,.2f}")
@@ -577,39 +571,28 @@ else:  # Loan Advisor Compensation Calculator
         with comp_cols[2]:
             st.subheader("ETHOS (After Cap)")
             metrics_after = {
-                "Gross Comp per Loan": ethos_after_gross,
                 "Net Comp per Loan": ethos_after_net,
-                "Compensation": ethos_after_annual,
-                "Monthly Average": ethos_after_annual/12
+                "Monthly Average": ethos_after_annual/12,
+                "Compensation": ethos_after_annual
             }
             for label, value in metrics_after.items():
                 st.metric(label, f"${value:,.2f}")
 
-        # Summary statistics with improved metrics
-        st.header("Summary")
-        summary_cols = st.columns(3)
-        
-        with summary_cols[0]:
-            st.metric(
-                "Total ETHOS Annual Compensation", 
-                f"${total_ethos_annual:,.2f}",
-                help="Total annual compensation with ETHOS"
-            )
-        
-        with summary_cols[1]:
-            st.metric(
-                "Additional Annual Compensation", 
-                f"${additional_comp:,.2f}",
-                delta=f"{(additional_comp/current_annual)*100:.1f}%",
-                help="Extra annual earnings with ETHOS"
-            )
-        
-        with summary_cols[2]:
-            st.metric(
-                "Additional Monthly Income",
-                f"${additional_comp/12:,.2f}",
-                help="Extra monthly earnings with ETHOS"
-            )
+        with comp_cols[3]:
+            st.subheader("Total ETHOS")
+            # Calculate combined metrics for ETHOS
+            total_net_comp = (ethos_before_net * before_cap_units + ethos_after_net * remaining_units) / annual_units
+            metrics_total = {
+                "Net Comp per Loan": total_net_comp,
+                "Monthly Average": total_ethos_annual/12,
+                "Annual Compensation": total_ethos_annual
+            }
+            for label, value in metrics_total.items():
+                st.metric(
+                    label, 
+                    f"${value:,.2f}",
+                    delta=f"{((value/metrics_current[label]-1)*100):.1f}% vs Current" if metrics_current[label] != 0 else None
+                )
 
         # Enhanced visualization
         fig = go.Figure()
