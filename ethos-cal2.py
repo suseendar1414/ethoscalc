@@ -469,7 +469,7 @@ else:  # Loan Advisor Compensation Calculator
         with col1:
             st.subheader("Loan Details")
             loan_amount = st.number_input(
-                "Loan Amount ($)", 
+                "Average Loan Amount ($)", 
                 min_value=0, 
                 value=500000, 
                 step=1000, 
