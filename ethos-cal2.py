@@ -516,7 +516,7 @@ else:  # Loan Advisor Compensation Calculator
             )
 
         # ETHOS calculations
-        ethos_rebate = 2.0
+        ethos_rebate = 1.70 
         ethos_transaction_fee = 495
         ethos_before_upline = 0.25  # Before cap upline contribution
         ethos_after_upline = 0.0    # After cap upline contribution
@@ -546,14 +546,24 @@ else:  # Loan Advisor Compensation Calculator
         # Enhanced Results display
         st.header("Compensation Comparison")
         
+        cap_volume = 10000000  # $10 million cap
+        total_volume = loan_amount * annual_units
+        before_cap_volume = min(total_volume, cap_volume)
+        after_cap_volume = max(0, total_volume - cap_volume)
+
+        before_cap_units = before_cap_volume / loan_amount
+        after_cap_units = after_cap_volume / loan_amount
+        # Modify the comp_cols section to add loan volume
         comp_cols = st.columns(4)
-        
+
         with comp_cols[0]:
             st.subheader("Current Lender")
             metrics_current = {
+                "Loan Volume": total_volume  ,# Add loan volume metric
                 "Net Comp per Loan": current_net,
                 "Monthly Average": current_annual/12,
-                "Annual Compensation": current_annual
+                "Annual Compensation": current_annual,
+                
             }
             for label, value in metrics_current.items():
                 st.metric(label, f"${value:,.2f}")
@@ -561,9 +571,11 @@ else:  # Loan Advisor Compensation Calculator
         with comp_cols[1]:
             st.subheader("ETHOS (Before Cap)")
             metrics_before = {
+                "Loan Volume": before_cap_volume , # Add before cap volume
                 "Net Comp per Loan": ethos_before_net,
                 "Monthly Average": ethos_before_annual/12,
-                "Compensation": ethos_before_annual
+                "Annual Compensation": ethos_before_annual,
+                
             }
             for label, value in metrics_before.items():
                 st.metric(label, f"${value:,.2f}")
@@ -571,21 +583,24 @@ else:  # Loan Advisor Compensation Calculator
         with comp_cols[2]:
             st.subheader("ETHOS (After Cap)")
             metrics_after = {
+                "Loan Volume": after_cap_volume , # Add after cap volume
                 "Net Comp per Loan": ethos_after_net,
                 "Monthly Average": ethos_after_annual/12,
-                "Compensation": ethos_after_annual
+                "Annual Compensation": ethos_after_annual,
+                
             }
             for label, value in metrics_after.items():
                 st.metric(label, f"${value:,.2f}")
 
         with comp_cols[3]:
             st.subheader("Total ETHOS")
-            # Calculate combined metrics for ETHOS
             total_net_comp = (ethos_before_net * before_cap_units + ethos_after_net * remaining_units) / annual_units
             metrics_total = {
+                "Loan Volume": total_volume,  # Add total loan volume
                 "Net Comp per Loan": total_net_comp,
                 "Monthly Average": total_ethos_annual/12,
-                "Annual Compensation": total_ethos_annual
+                "Annual Compensation": total_ethos_annual,
+                
             }
             for label, value in metrics_total.items():
                 st.metric(
