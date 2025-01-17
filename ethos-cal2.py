@@ -560,7 +560,7 @@ else:  # Loan Advisor Compensation Calculator
             st.subheader("Current Lender")
             metrics_current = {
                 "Loan Volume": total_volume  ,# Add loan volume metric
-                "Net Comp per Loan": current_net,
+                "Comp per Loan": current_net,
                 "Monthly Average": current_annual/12,
                 "Annual Compensation": current_annual,
                 
@@ -572,7 +572,7 @@ else:  # Loan Advisor Compensation Calculator
             st.subheader("ETHOS (Before Cap)")
             metrics_before = {
                 "Loan Volume": before_cap_volume , # Add before cap volume
-                "Net Comp per Loan": ethos_before_net,
+                "Comp per Loan": ethos_before_net,
                 "Monthly Average": ethos_before_annual/12,
                 "Annual Compensation": ethos_before_annual,
                 
@@ -584,7 +584,7 @@ else:  # Loan Advisor Compensation Calculator
             st.subheader("ETHOS (After Cap)")
             metrics_after = {
                 "Loan Volume": after_cap_volume , # Add after cap volume
-                "Net Comp per Loan": ethos_after_net,
+                "Comp per Loan": ethos_after_net,
                 "Monthly Average": ethos_after_annual/12,
                 "Annual Compensation": ethos_after_annual,
                 
@@ -597,7 +597,7 @@ else:  # Loan Advisor Compensation Calculator
             total_net_comp = (ethos_before_net * before_cap_units + ethos_after_net * remaining_units) / annual_units
             metrics_total = {
                 "Loan Volume": total_volume,  # Add total loan volume
-                "Net Comp per Loan": total_net_comp,
+                "Comp per Loan": total_net_comp,
                 "Monthly Average": total_ethos_annual/12,
                 "Annual Compensation": total_ethos_annual,
                 
