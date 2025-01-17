@@ -606,7 +606,7 @@ else:  # Loan Advisor Compensation Calculator
                 st.metric(
                     label, 
                     f"${value:,.2f}",
-                    delta=f"{((value/metrics_current[label]-1)*100):.1f}% vs Current" if metrics_current[label] != 0 else None
+                    delta=f"{((value/metrics_current[label]-1)*100):.1f}% vs Current lender" if metrics_current[label] != 0 else None
                 )
 
         # Enhanced visualization
