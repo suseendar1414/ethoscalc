@@ -611,7 +611,7 @@ else:  # Loan Advisor Compensation Calculator
 
         # Enhanced visualization
         fig = go.Figure()
-        
+
         fig.add_trace(go.Bar(
             name='Current Lender',
             x=['Annual Compensation'],
@@ -620,7 +620,7 @@ else:  # Loan Advisor Compensation Calculator
             textposition='auto',
             marker_color='rgb(55, 83, 109)'
         ))
-        
+
         fig.add_trace(go.Bar(
             name='ETHOS (Before Cap)',
             x=['Annual Compensation'],
@@ -629,7 +629,7 @@ else:  # Loan Advisor Compensation Calculator
             textposition='auto',
             marker_color='rgb(26, 118, 255)'
         ))
-        
+
         fig.add_trace(go.Bar(
             name='ETHOS (After Cap)',
             x=['Annual Compensation'],
@@ -637,6 +637,15 @@ else:  # Loan Advisor Compensation Calculator
             text=[f'${ethos_after_annual:,.0f}'],
             textposition='auto',
             marker_color='rgb(58, 149, 255)'
+        ))
+
+        fig.add_trace(go.Bar(
+            name='Total ETHOS',
+            x=['Annual Compensation'],
+            y=[total_ethos_annual],
+            text=[f'${total_ethos_annual:,.0f}'],
+            textposition='auto',
+            marker_color='rgb(0, 191, 255)'  # A distinct blue shade for total
         ))
 
         fig.update_layout(
