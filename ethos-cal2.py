@@ -459,7 +459,7 @@ if calculator_type == "Revenue Share Calculator":
 else:  # Loan Advisor Compensation Calculator
     st.title("💰 Loan Advisor Compensation Calculator")
     
-    tab1, tab2 = st.tabs(["Calculator", "Monthly Projections"])
+    tab1, tab2, tab3 = st.tabs(["Calculator", "Monthly Projections", "Team Management"])
     
     with tab1:
         st.write("Compare your compensation between current lender and ETHOS")
@@ -710,3 +710,326 @@ else:  # Loan Advisor Compensation Calculator
             }),
             use_container_width=True
         )
+    with tab3:
+        st.title("Team Performance Dashboard")
+
+        # Initialize session state for team members if it doesn't exist
+        if 'team_members' not in st.session_state:
+            st.session_state.team_members = []
+
+        # Add team member section
+        with st.expander("Manage Team Members", expanded=True):
+            # File uploader section
+            st.subheader("Bulk Upload via File")
+            uploaded_file = st.file_uploader(
+                "Upload Team File (Excel or CSV)", 
+                type=["xlsx", "csv"],
+                help="Upload file with columns: Name, Loan Size, Units"
+            )
+            
+            # Template download
+            if st.button("Download Template"):
+                sample_data = pd.DataFrame({
+                    'Name': ['John Doe', 'Jane Smith'],
+                    'Loan Size': [500000, 450000],
+                    'Units': [50, 60]
+                })
+                
+                towrite = io.BytesIO()
+                sample_data.to_excel(towrite, index=False, engine='openpyxl')
+                towrite.seek(0)
+                
+                st.download_button(
+                    label="Download Excel Template",
+                    data=towrite,
+                    file_name="team_template.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+            if uploaded_file is not None:
+                try:
+                    # Read file based on extension
+                    if uploaded_file.name.endswith('.csv'):
+                        df = pd.read_csv(uploaded_file)
+                    else:
+                        df = pd.read_excel(uploaded_file, engine='openpyxl')
+
+                    # Validate columns
+                    required_columns = ['Name', 'Loan Size', 'Units']
+                    if not all(col in df.columns for col in required_columns):
+                        st.error(f"Missing required columns. File must contain: {', '.join(required_columns)}")
+                    else:
+                        # Clear existing team if desired
+                        if st.checkbox("Replace existing team with uploaded data"):
+                            st.session_state.team_members = []
+
+                        # Process uploaded data
+                        new_members = []
+                        for _, row in df.iterrows():
+                            try:
+                                loan_size = float(row['Loan Size'])
+                                units = int(row['Units'])
+                                
+                                new_members.append({
+                                    "name": row['Name'],
+                                    "loan_size": loan_size,
+                                    "units": units,
+                                    "volume": loan_size * units,
+                                    "currentComp": calculate_compensation(
+                                        loan_size, interest_rate, current_rebate,
+                                        company_split, current_transaction_fee, units)[1],
+                                    "ethosComp": calculate_compensation(
+                                        loan_size, interest_rate, ethos_rebate,
+                                        ethos_before_upline, ethos_transaction_fee,
+                                        min(units, cap_units))[1] + 
+                                        calculate_compensation(
+                                            loan_size, interest_rate, ethos_rebate,
+                                            ethos_after_upline, ethos_transaction_fee,
+                                            max(0, units - cap_units))[1]
+                                })
+                            except Exception as e:
+                                st.error(f"Error processing row {_+1}: {str(e)}")
+                                continue
+                        
+                        st.session_state.team_members += new_members
+                        st.success(f"Successfully added {len(new_members)} members from file!")
+                        st.experimental_rerun()
+
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+            input_method = st.radio("Select Input Method", ["Add Single Member", "Add Multiple Members"], horizontal=True)
+
+            if input_method == "Add Single Member":
+                cols = st.columns([3, 3, 3, 2])
+                with cols[0]:
+                    name = st.text_input("Name")
+                with cols[1]:
+                    loan_size = st.number_input("Loan Size", value=500000, step=1000)
+                with cols[2]:
+                    units = st.number_input("Annual Units", value=50)
+
+                if cols[3].button("Calculate"):
+                    if name:
+                        # Calculate both compensations
+                        current_comp = calculate_compensation(
+                            loan_size, interest_rate, current_rebate, 
+                            company_split, current_transaction_fee, units)[1]
+
+                        ethos_before_comp = calculate_compensation(
+                            loan_size, interest_rate, ethos_rebate,
+                            ethos_before_upline, ethos_transaction_fee, 
+                            min(units, cap_units))[1]
+
+                        ethos_after_comp = calculate_compensation(
+                            loan_size, interest_rate, ethos_rebate,
+                            ethos_after_upline, ethos_transaction_fee, 
+                            max(0, units - cap_units))[1]
+
+                        ethos_total = ethos_before_comp + ethos_after_comp
+
+                        # Show calculation results
+                        st.subheader("Compensation Comparison")
+                        comp_cols = st.columns(2)
+                        comp_cols[0].metric("Current Lender", f"${current_comp:,.2f}")
+                        comp_cols[1].metric("ETHOS", f"${ethos_total:,.2f}", 
+                                            f"{((ethos_total/current_comp - 1) * 100):,.1f}%")
+
+                        # Monthly projection comparison
+                        current_monthly = create_monthly_projection(units, current_comp/units)
+                        ethos_monthly = create_monthly_projection(units, ethos_total/units)
+
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=current_monthly['Month'],
+                            y=current_monthly['Cumulative Income'],
+                            name='Current Lender'
+                        ))
+                        fig.add_trace(go.Scatter(
+                            x=ethos_monthly['Month'],
+                            y=ethos_monthly['Cumulative Income'],
+                            name='ETHOS'
+                        ))
+                        fig.update_layout(
+                            title="Monthly Income Projection",
+                            xaxis_title="Month",
+                            yaxis_title="Cumulative Income ($)"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        if st.button("Add to Team"):
+                            st.session_state.team_members.append({
+                                "name": name,
+                                "loan_size": loan_size,
+                                "units": units,
+                                "volume": loan_size * units,
+                                "currentComp": current_comp,
+                                "ethosComp": ethos_total
+                            })
+                            st.success(f"Added {name} to team!")
+                            st.experimental_rerun()
+
+            else:  # Multiple members input section
+                n_members = st.number_input("Number of Team Members", min_value=1, value=1)
+                members_data = []
+
+                for i in range(int(n_members)):
+                    st.subheader(f"Member {i+1}")
+                    cols = st.columns(3)
+                    members_data.append({
+                        "name": cols[0].text_input("Name", key=f"name_{i}"),
+                        "loan_size": cols[1].number_input("Loan Size", value=500000, step=1000, key=f"loan_{i}"),
+                        "units": cols[2].number_input("Units", value=50, key=f"units_{i}")
+                    })
+
+                if st.button("Calculate All"):
+                    for member in members_data:
+                        if member["name"]:
+                            st.subheader(f"Calculation for {member['name']}")
+
+                            current_comp = calculate_compensation(
+                                member["loan_size"], interest_rate, current_rebate,
+                                company_split, current_transaction_fee, member["units"])[1]
+
+                            ethos_before = calculate_compensation(
+                                member["loan_size"], interest_rate, ethos_rebate,
+                                ethos_before_upline, ethos_transaction_fee,
+                                min(member["units"], cap_units))[1]
+
+                            ethos_after = calculate_compensation(
+                                member["loan_size"], interest_rate, ethos_rebate,
+                                ethos_after_upline, ethos_transaction_fee,
+                                max(0, member["units"] - cap_units))[1]
+
+                            ethos_total = ethos_before + ethos_after
+
+                            cols = st.columns(2)
+                            cols[0].metric("Current", f"${current_comp:,.2f}")
+                            cols[1].metric("ETHOS", f"${ethos_total:,.2f}",
+                                            f"{((ethos_total/current_comp - 1) * 100):,.1f}%")
+
+                    if st.button("Add All to Team"):
+                        for member in members_data:
+                            if member["name"]:
+                                current_comp = calculate_compensation(
+                                    member["loan_size"], interest_rate, current_rebate,
+                                    company_split, current_transaction_fee, member["units"])[1]
+
+                                ethos_total = calculate_compensation(
+                                    member["loan_size"], interest_rate, ethos_rebate,
+                                    ethos_before_upline, ethos_transaction_fee,
+                                    min(member["units"], cap_units))[1] + \
+                                    calculate_compensation(
+                                        member["loan_size"], interest_rate, ethos_rebate,
+                                        ethos_after_upline, ethos_transaction_fee,
+                                        max(0, member["units"] - cap_units))[1]
+
+                                st.session_state.team_members.append({
+                                    "name": member["name"],
+                                    "loan_size": member["loan_size"],
+                                    "units": member["units"],
+                                    "volume": member["loan_size"] * member["units"],
+                                    "currentComp": current_comp,
+                                    "ethosComp": ethos_total
+                                })
+                        st.success("Added all members to team!")
+                        st.experimental_rerun()
+
+        # New Dashboard Section
+        if st.session_state.team_members:
+            team = st.session_state.team_members
+
+            # Create tabs for Team Overview and Individual Analysis
+            team_tabs = st.tabs(["Team Overview", "Individual Analysis"])
+
+            with team_tabs[0]:  # Team Overview
+                CAP_VOLUME = 10000000  # $10M cap
+
+                # Calculate team metrics
+                total_units = sum(m["units"] for m in team)
+                total_volume = sum(m["volume"] for m in team)
+                avg_loan_size = sum(m["loan_size"] for m in team) / len(team)
+
+                # Calculate before/after cap volumes
+                team_before_cap = sum(min(m["volume"], CAP_VOLUME) for m in team)
+                team_after_cap = sum(max(0, m["volume"] - CAP_VOLUME) for m in team)
+
+                # Display team metrics
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Units", f"{total_units:,}")
+                col2.metric("Total Volume", f"${total_volume:,.0f}")
+                col3.metric("Average Loan Size", f"${avg_loan_size:,.0f}")
+
+                col4, col5 = st.columns(2)
+                col4.metric("Volume Before Cap", f"${team_before_cap:,.0f}")
+                col5.metric("Volume After Cap", f"${team_after_cap:,.0f}")
+
+                # Team volume distribution chart
+                volume_data = pd.DataFrame(team)[['name', 'volume']]
+                fig_volume = px.pie(volume_data, values='volume', names='name',
+                                    title="Volume Distribution")
+                st.plotly_chart(fig_volume, use_container_width=True)
+
+                # Compensation comparison chart
+                comp_data = pd.DataFrame([
+                    {"name": m["name"], "type": "Current", "amount": m["currentComp"]} for m in team
+                ] + [
+                    {"name": m["name"], "type": "ETHOS", "amount": m["ethosComp"]} for m in team
+                ])
+                fig_comp = px.bar(comp_data, x="name", y="amount", color="type",
+                                    title="Compensation Comparison", barmode="group")
+                st.plotly_chart(fig_comp, use_container_width=True)
+
+            with team_tabs[1]:  # Individual Analysis
+                # Member selection
+                selected_member = st.selectbox("Select Team Member", 
+                                            [m["name"] for m in team])
+
+                if selected_member:
+                    member = next(m for m in team if m["name"] == selected_member)
+
+                    # Calculate individual metrics
+                    member_volume = member["loan_size"] * member["units"]
+                    before_cap_volume = min(member_volume, CAP_VOLUME)
+                    after_cap_volume = max(0, member_volume - CAP_VOLUME)
+                    before_cap_units = before_cap_volume / member["loan_size"]
+                    after_cap_units = after_cap_volume / member["loan_size"]
+
+                    # Display individual metrics
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Total Units", member["units"])
+                    col2.metric("Total Volume", f"${member_volume:,.0f}")
+                    col3.metric("Loan Size", f"${member['loan_size']:,.0f}")
+
+                    col4, col5 = st.columns(2)
+                    col4.metric("Units Before Cap", f"{int(before_cap_units)}")
+                    col5.metric("Units After Cap", f"{int(after_cap_units)}")
+
+                    col6, col7 = st.columns(2)
+                    col6.metric("Volume Before Cap", f"${before_cap_volume:,.0f}")
+                    col7.metric("Volume After Cap", f"${after_cap_volume:,.0f}")
+
+                    # Monthly projections
+                    current_monthly = create_monthly_projection(member["units"], 
+                        member["currentComp"]/member["units"])
+                    ethos_monthly = create_monthly_projection(member["units"], 
+                        member["ethosComp"]/member["units"])
+
+                    fig_monthly = go.Figure()
+                    fig_monthly.add_trace(go.Scatter(
+                        x=current_monthly['Month'],
+                        y=current_monthly['Cumulative Income'],
+                        name='Current Lender'
+                    ))
+                    fig_monthly.add_trace(go.Scatter(
+                        x=ethos_monthly['Month'],
+                        y=ethos_monthly['Cumulative Income'],
+                        name='ETHOS'
+                    ))
+                    fig_monthly.update_layout(
+                        title=f"Monthly Income Projection - {selected_member}",
+                        xaxis_title="Month",
+                        yaxis_title="Cumulative Income ($)"
+                    )
+                    st.plotly_chart(fig_monthly, use_container_width=True)
+        else:
+            st.info("Add team members to see the dashboard")
