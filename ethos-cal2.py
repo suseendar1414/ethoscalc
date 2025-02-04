@@ -10,6 +10,10 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import io
 from PIL import Image as PILImage
+import streamlit.components.v1 as components
+import base64
+import io
+
 
 # Configure the page
 st.set_page_config(page_title="Ethos Lending Calculator Suite", layout="wide")
@@ -459,7 +463,7 @@ if calculator_type == "Revenue Share Calculator":
 else:  # Loan Advisor Compensation Calculator
     st.title("💰 Loan Advisor Compensation Calculator")
     
-    tab1, tab2, tab3 = st.tabs(["Calculator", "Monthly Projections", "Team Management"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Calculator", "Monthly Projections", "Team Management", "Upload Team"])
     
     with tab1:
         st.write("Compare your compensation between current lender and ETHOS")
@@ -715,251 +719,366 @@ else:  # Loan Advisor Compensation Calculator
 
         if 'team_members' not in st.session_state:
             st.session_state.team_members = []
-
-        with st.expander("Manage Team Members", expanded=True):
-            st.subheader("Upload Team Data")
-            uploaded_file = st.file_uploader(
-                "Upload Team File (Excel or CSV)", 
-                type=["xlsx", "csv"],
-                help="Upload file with columns: Name, Loan Size, Units"
-            )
-
-            # Template download section
-            if st.button("Download Template"):
-                sample_data = pd.DataFrame({
-                    'Name': ['John Doe', 'Jane Smith'],
-                    'Loan Size': [500000, 450000],
-                    'Units': [50, 60]
-                })
-                
-                # Create Excel template
-                buffer = io.BytesIO()
-                sample_data.to_excel(buffer, index=False, engine='openpyxl')
-                buffer.seek(0)
-                
-                st.download_button(
-                    label="Download Template",
-                    data=buffer,
-                    file_name="team_template.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-            if uploaded_file is not None:
-                try:
-                    # Read file based on extension
-                    if uploaded_file.name.endswith('.csv'):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(uploaded_file, engine='openpyxl')
-                    
-                    # Validate columns
-                    required_columns = ['Name', 'Loan Size', 'Units']
-                    if not all(col in df.columns for col in required_columns):
-                        st.error(f"Missing required columns. File must contain: {', '.join(required_columns)}")
-                    else:
-                        if st.checkbox("Replace existing team"):
-                            st.session_state.team_members = []
-                        
-                        new_members = []
-                        for idx, row in df.iterrows():
-                            try:
-                                name = str(row['Name']).strip()
-                                loan_size = float(row['Loan Size'])
-                                units = int(row['Units'])
-                                
-                                if not name or loan_size <= 0 or units <= 0:
-                                    st.warning(f"Skipping invalid data in row {idx + 1}")
-                                    continue
-                                
-                                before_cap_comp = calculate_compensation(
-                                    loan_size, interest_rate, ethos_rebate,
-                                    ethos_before_upline, ethos_transaction_fee,
-                                    min(units, cap_units))[1]
-                                    
-                                after_cap_comp = calculate_compensation(
-                                    loan_size, interest_rate, ethos_rebate,
-                                    ethos_after_upline, ethos_transaction_fee,
-                                    max(0, units - cap_units))[1]
-                                    
-                                ethos_total = before_cap_comp + after_cap_comp
-                                current_comp = calculate_compensation(
-                                    loan_size, interest_rate, current_rebate,
-                                    company_split, current_transaction_fee, units)[1]
-                                
-                                new_members.append({
-                                    "name": name,
-                                    "loan_size": loan_size,
-                                    "units": units,
-                                    "volume": loan_size * units,
-                                    "currentComp": current_comp,
-                                    "ethosComp": ethos_total,
-                                    "ethosBeforeCap": before_cap_comp,
-                                    "ethosAfterCap": after_cap_comp
-                                })
-                            except Exception as e:
-                                st.error(f"Error processing row {idx + 1}: {str(e)}")
-                                continue
-                        
-                        if new_members:
-                            st.session_state.team_members.extend(new_members)
-                            st.success(f"Successfully added {len(new_members)} team members!")
-                            st.experimental_rerun()
-                        else:
-                            st.warning("No valid data found in file")
-                            
-                except Exception as e:
-                    st.error(f"Error reading file: {str(e)}")
         
-            input_method = st.radio("Select Input Method", ["Add Single Member", "Add Multiple Members"], horizontal=True)
+        # Add current lender parameters input section
+        st.subheader("Current Lender Parameters")
+        current_cols = st.columns(3)
+        with current_cols[0]:
+            interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.75, step=0.125)
+        with current_cols[1]:
+            current_rebate = st.number_input("Current Rebate (%)", min_value=0.0, value=1.0, step=0.1)
+        with current_cols[2]:
+            current_transaction_fee = st.number_input("Current Transaction Fee ($)", min_value=0.0, value=0.0, step=1.0)
+
+        # ETHOS parameters (constant)
+        ethos_rebate = 1.70
+        ethos_transaction_fee = 495
+        ethos_before_upline = 0.25
+        ethos_after_upline = 0.0
+        cap_units = 20
+
+        input_method = st.radio("Select Input Method", ["Add Single Member", "Add Multiple Members"], horizontal=True)
             
-            if input_method == "Add Single Member":
-                with st.form("add_member_form", clear_on_submit=True):
-                    name = st.text_input("Name")
-                    loan_size = st.number_input("Loan Size", value=500000, step=1000)
-                    units = st.number_input("Annual Units", value=50, step=1)
-                    calculate = st.form_submit_button("Calculate")
-                    submit = st.form_submit_button("Add Member")
+        if input_method == "Add Single Member":
+            with st.form("add_member_form", clear_on_submit=True):
+                name = st.text_input("Name")
+                loan_size = st.number_input("Loan Size", value=500000, step=1000)
+                units = st.number_input("Annual Units", value=50, step=1)
+                calculate = st.form_submit_button("Calculate")
+                submit = st.form_submit_button("Add Member")
+                
+                if calculate:
+                    before_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_before_upline, ethos_transaction_fee, min(units, cap_units))[1]
+                    after_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_after_upline, ethos_transaction_fee, max(0, units - cap_units))[1]
+                    ethos_total = before_cap_comp + after_cap_comp
                     
-                    if calculate:
-                        before_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_before_upline, ethos_transaction_fee, min(units, cap_units))[1]
-                        after_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_after_upline, ethos_transaction_fee, max(0, units - cap_units))[1]
-                        ethos_total = before_cap_comp + after_cap_comp
-                        
-                        st.metric("Before Cap Compensation", f"${before_cap_comp:,.2f}")
-                        st.metric("After Cap Compensation", f"${after_cap_comp:,.2f}")
-                        st.metric("Total ETHOS Compensation", f"${ethos_total:,.2f}")
+                    st.metric("Before Cap Compensation", f"${before_cap_comp:,.2f}")
+                    st.metric("After Cap Compensation", f"${after_cap_comp:,.2f}")
+                    st.metric("Total ETHOS Compensation", f"${ethos_total:,.2f}")
+                
+                if submit and name:
+                    before_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_before_upline, ethos_transaction_fee, min(units, cap_units))[1]
+                    after_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_after_upline, ethos_transaction_fee, max(0, units - cap_units))[1]
+                    ethos_total = before_cap_comp + after_cap_comp
                     
-                    if submit and name:
-                        before_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_before_upline, ethos_transaction_fee, min(units, cap_units))[1]
-                        after_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_after_upline, ethos_transaction_fee, max(0, units - cap_units))[1]
-                        ethos_total = before_cap_comp + after_cap_comp
-                        
-                        st.session_state.team_members.append({
-                            "name": name,
-                            "loan_size": loan_size,
-                            "units": units,
-                            "volume": loan_size * units,
-                            "currentComp": calculate_compensation(loan_size, interest_rate, current_rebate, company_split, current_transaction_fee, units)[1],
-                            "ethosComp": ethos_total,
+                    st.session_state.team_members.append({
+                        "name": name,
+                        "loan_size": loan_size,
+                        "units": units,
+                        "volume": loan_size * units,
+                        "currentComp": calculate_compensation(loan_size, interest_rate, current_rebate, company_split, current_transaction_fee, units)[1],
+                        "ethosComp": ethos_total,
+                        "ethosBeforeCap": before_cap_comp,
+                        "ethosAfterCap": after_cap_comp
+                    })
+                    st.success(f"Added {name} to team!")
+                    st.rerun()
+
+        elif input_method == "Add Multiple Members":
+            num_members = st.number_input("Number of Team Members", min_value=1, value=1, step=1)
+
+            members_data = []
+            for i in range(int(num_members)):
+                st.subheader(f"Member {i+1}")
+                cols = st.columns(3)
+                members_data.append({
+                    "name": cols[0].text_input(f"Name {i+1}", key=f"name_{i}"),
+                    "loan_size": cols[1].number_input(f"Loan Size {i+1}", value=500000, step=1000, key=f"loan_{i}"),
+                    "units": cols[2].number_input(f"Units {i+1}", value=50, step=1, key=f"units_{i}")
+                })
+
+            if st.button("Calculate"):
+                results = []
+                for member in members_data:
+                    if member["name"]:
+                        before_cap_comp = calculate_compensation(
+                            member["loan_size"], interest_rate, ethos_rebate,
+                            ethos_before_upline, ethos_transaction_fee,
+                            min(member["units"], cap_units))[1]
+
+                        after_cap_comp = calculate_compensation(
+                            member["loan_size"], interest_rate, ethos_rebate,
+                            ethos_after_upline, ethos_transaction_fee,
+                            max(0, member["units"] - cap_units))[1]
+
+                        results.append({
+                            "name": member["name"],
+                            "loan_size": member["loan_size"],
+                            "units": member["units"],
+                            "volume": member["loan_size"] * member["units"],
+                            "currentComp": calculate_compensation(
+                                member["loan_size"], interest_rate, current_rebate,
+                                company_split, current_transaction_fee, member["units"])[1],
+                            "ethosComp": before_cap_comp + after_cap_comp,
                             "ethosBeforeCap": before_cap_comp,
                             "ethosAfterCap": after_cap_comp
                         })
-                        st.success(f"Added {name} to team!")
-                        st.rerun()
-            
-            elif input_method == "Add Multiple Members":
-                num_members = st.number_input("Number of Team Members", min_value=1, value=1, step=1)
 
-                members_data = []
-                for i in range(int(num_members)):
-                    st.subheader(f"Member {i+1}")
-                    cols = st.columns(3)
-                    members_data.append({
-                        "name": cols[0].text_input(f"Name {i+1}", key=f"name_{i}"),
-                        "loan_size": cols[1].number_input(f"Loan Size {i+1}", value=500000, step=1000, key=f"loan_{i}"),
-                        "units": cols[2].number_input(f"Units {i+1}", value=50, step=1, key=f"units_{i}")
-                    })
+                if results:
+                    html_content = f"""
+                    <html>
+                    <head>
+                        <title>Team Compensation Report</title>
+                        <style>
+                            :root {{
+                                color-scheme: light dark;
+                            }}
+                            body {{ 
+                                font-family: Arial, sans-serif; 
+                                padding: 20px;
+                            }}
+                            @media (prefers-color-scheme: dark) {{
+                                body {{
+                                    background: #1a1a1a;
+                                    color: #fff;
+                                }}
+                                th {{ background: #333; }}
+                                th, td {{ border-color: #444; }}
+                            }}
+                            @media (prefers-color-scheme: light) {{
+                                body {{
+                                    background: #fff;
+                                    color: #000;
+                                }}
+                                th {{ background: #f5f5f5; }}
+                                th, td {{ border-color: #ddd; }}
+                            }}
+                            table {{ 
+                                width: 100%; 
+                                border-collapse: collapse; 
+                                margin: 20px 0;
+                            }}
+                            th, td {{ 
+                                padding: 12px;
+                                border-width: 1px;
+                                border-style: solid;
+                                text-align: left; 
+                            }}
+                            .summary {{ margin-top: 20px; }}
+                        </style>
+                    </head>
+                        <body>
+                            <h2>Team Compensation Report</h2>
+                            <table>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Loan Size</th>
+                                    <th>Units</th>
+                                    <th>Volume</th>
+                                    <th>Current Comp</th>
+                                    <th>ETHOS Before Cap</th>
+                                    <th>ETHOS After Cap</th>
+                                    <th>ETHOS Total</th>
+                                </tr>
+                                {''.join([f'''
+                                <tr>
+                                    <td>{r['name']}</td>
+                                    <td>${r['loan_size']:,.2f}</td>
+                                    <td>{r['units']}</td>
+                                    <td>${r['volume']:,.2f}</td>
+                                    <td>${r['currentComp']:,.2f}</td>
+                                    <td>${r['ethosBeforeCap']:,.2f}</td>
+                                    <td>${r['ethosAfterCap']:,.2f}</td>
+                                    <td>${r['ethosComp']:,.2f}</td>
+                                </tr>
+                                ''' for r in results])}
+                            </table>
+                            <div class="summary">
+                                <h3>Summary</h3>
+                                <p>Total Volume: ${sum(r['volume'] for r in results):,.2f}</p>
+                                <p>Total Current Compensation: ${sum(r['currentComp'] for r in results):,.2f}</p>
+                                <p>Total ETHOS Compensation: ${sum(r['ethosComp'] for r in results):,.2f}</p>
+                                <p>Additional Team Compensation with ETHOS: ${sum(r['ethosComp'] for r in results) - sum(r['currentComp'] for r in results):,.2f}</p>
+                            </div>
+                        </body>
+                    </html>
+                    """
 
-                # Calculate button for multiple members
-                if st.button("Calculate All"):
+                    components.html(html_content, height=800)
+
+                    st.download_button(
+                        label="Download Team Report",
+                        data=html_content,
+                        file_name="team_report.html",
+                        mime="text/html"
+                    )
+
+    with tab4:
+        st.title("Upload Team Data")
+        
+        # Create template CSV
+        template_data = {
+            'Name': ['John Doe', 'Jane Smith'],
+            'Loan Size': [500000, 600000],
+            'Annual Units': [50, 45]
+        }
+        template_df = pd.DataFrame(template_data)
+        template_csv = template_df.to_csv(index=False)
+        
+        # Template download section
+        st.subheader("1. Download Template")
+        st.write("Your upload file should contain these columns:")
+        st.write("- **Name**: Team member's name")
+        st.write("- **Loan Size**: Average loan amount")
+        st.write("- **Annual Units**: Number of loans per year")
+        
+        st.download_button(
+            label="📥 Download Template CSV",
+            data=template_csv,
+            file_name="team_template.csv",
+            mime="text/csv"
+        )
+        
+        # Current lender parameters
+        st.subheader("2. Enter Current Lender Parameters")
+        current_cols = st.columns(3)
+        with current_cols[0]:
+            interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.75, step=0.125, key="upload_interest_rate")
+        with current_cols[1]:
+            current_rebate = st.number_input("Current Rebate (%)", min_value=0.0, value=1.0, step=0.1, key="upload_current_rebate")
+        with current_cols[2]:
+            current_transaction_fee = st.number_input("Current Transaction Fee ($)", min_value=0.0, value=0.0, step=1.0, key="upload_transaction_fee")
+        
+        # File upload
+        st.subheader("3. Upload Team Data")
+        uploaded_file = st.file_uploader("Choose a CSV file", type='csv')
+        
+        if uploaded_file is not None:
+            try:
+                df = pd.read_csv(uploaded_file)
+                required_columns = ['Name', 'Loan Size', 'Annual Units']
+                
+                if not all(col in df.columns for col in required_columns):
+                    st.error("Upload file must contain columns: Name, Loan Size, Annual Units")
+                else:
+                    # ETHOS parameters
+                    ethos_rebate = 1.70
+                    ethos_transaction_fee = 495
+                    ethos_before_upline = 0.25
+                    ethos_after_upline = 0.0
+                    cap_units = 20
+                    
+                    # Calculate compensation for each team member
                     results = []
-                    for member in members_data:
-                        if member["name"]:
-                            before_cap_comp = calculate_compensation(
-                                member["loan_size"], interest_rate, ethos_rebate,
-                                ethos_before_upline, ethos_transaction_fee,
-                                min(member["units"], cap_units))[1]
-
-                            after_cap_comp = calculate_compensation(
-                                member["loan_size"], interest_rate, ethos_rebate,
-                                ethos_after_upline, ethos_transaction_fee,
-                                max(0, member["units"] - cap_units))[1]
-
-                            ethos_total = before_cap_comp + after_cap_comp
-                            current_comp = calculate_compensation(
-                                member["loan_size"], interest_rate, current_rebate,
-                                company_split, current_transaction_fee, member["units"])[1]
-
-                            results.append({
-                                "Name": member["name"],
-                                "Current Compensation": current_comp,
-                                "ETHOS Before Cap": before_cap_comp,
-                                "ETHOS After Cap": after_cap_comp,
-                                "Total ETHOS Compensation": ethos_total
-                            })
-
-                    # Display results in a table
-                    if results:
-                        df_results = pd.DataFrame(results)
-                        df_results_display = df_results.copy()
-                        df_results_display["Current Compensation"] = df_results_display["Current Compensation"].apply(lambda x: f"${x:,.2f}")
-                        df_results_display["ETHOS Before Cap"] = df_results_display["ETHOS Before Cap"].apply(lambda x: f"${x:,.2f}")
-                        df_results_display["ETHOS After Cap"] = df_results_display["ETHOS After Cap"].apply(lambda x: f"${x:,.2f}")
-                        df_results_display["Total ETHOS Compensation"] = df_results_display["Total ETHOS Compensation"].apply(lambda x: f"${x:,.2f}")
-
-                        st.dataframe(df_results_display, use_container_width=True)
-
-                        # Bar Chart Visualization
-                        fig = go.Figure()
-                        fig.add_trace(go.Bar(
-                            name="Current Compensation",
-                            x=df_results["Name"],
-                            y=df_results["Current Compensation"],
-                            text=[f"${x:,.2f}" for x in df_results["Current Compensation"]],
-                            textposition='auto',
-                            marker_color="rgb(55, 83, 109)"
-                        ))
-                        fig.add_trace(go.Bar(
-                            name="ETHOS Total Compensation",
-                            x=df_results["Name"],
-                            y=df_results["Total ETHOS Compensation"],
-                            text=[f"${x:,.2f}" for x in df_results["Total ETHOS Compensation"]],
-                            textposition='auto',
-                            marker_color="rgb(26, 118, 255)"
-                        ))
-
-                        fig.update_layout(
-                            title="Compensation Comparison: Current Lender vs ETHOS",
-                            xaxis_title="Team Members",
-                            yaxis_title="Compensation ($)",
-                            barmode="group",
-                            showlegend=True,
-                            height=500
-                        )
-
-                        st.plotly_chart(fig, use_container_width=True)
-
-                # Add All Members to Team
-                if st.button("Add All to Team"):
-                    for member in members_data:
-                        if member["name"]:
-                            before_cap_comp = calculate_compensation(
-                                member["loan_size"], interest_rate, ethos_rebate,
-                                ethos_before_upline, ethos_transaction_fee,
-                                min(member["units"], cap_units))[1]
-
-                            after_cap_comp = calculate_compensation(
-                                member["loan_size"], interest_rate, ethos_rebate,
-                                ethos_after_upline, ethos_transaction_fee,
-                                max(0, member["units"] - cap_units))[1]
-
-                            ethos_total = before_cap_comp + after_cap_comp
-                            current_comp = calculate_compensation(
-                                member["loan_size"], interest_rate, current_rebate,
-                                company_split, current_transaction_fee, member["units"])[1]
-
-                            st.session_state.team_members.append({
-                                "name": member["name"],
-                                "loan_size": member["loan_size"],
-                                "units": member["units"],
-                                "volume": member["loan_size"] * member["units"],
-                                "currentComp": current_comp,
-                                "ethosComp": ethos_total,
-                                "ethosBeforeCap": before_cap_comp,
-                                "ethosAfterCap": after_cap_comp
-                            })
-
-                    st.success("All members added successfully!")
-                    st.rerun()
+                    for _, row in df.iterrows():
+                        before_cap_comp = calculate_compensation(
+                            row['Loan Size'], interest_rate, ethos_rebate,
+                            ethos_before_upline, ethos_transaction_fee,
+                            min(row['Annual Units'], cap_units))[1]
+                            
+                        after_cap_comp = calculate_compensation(
+                            row['Loan Size'], interest_rate, ethos_rebate,
+                            ethos_after_upline, ethos_transaction_fee,
+                            max(0, row['Annual Units'] - cap_units))[1]
+                            
+                        current_comp = calculate_compensation(
+                            row['Loan Size'], interest_rate, current_rebate,
+                            company_split, current_transaction_fee,
+                            row['Annual Units'])[1]
+                            
+                        results.append({
+                            "name": row['Name'],
+                            "loan_size": row['Loan Size'],
+                            "units": row['Annual Units'],
+                            "volume": row['Loan Size'] * row['Annual Units'],
+                            "currentComp": current_comp,
+                            "ethosComp": before_cap_comp + after_cap_comp,
+                            "ethosBeforeCap": before_cap_comp,
+                            "ethosAfterCap": after_cap_comp
+                        })
+                    
+                    # Generate HTML report
+                    html_content = f"""
+                    <html>
+                    <head>
+                        <title>Team Compensation Report</title>
+                        <style>
+                            :root {{
+                                color-scheme: light dark;
+                            }}
+                            body {{ 
+                                font-family: Arial, sans-serif; 
+                                padding: 20px;
+                            }}
+                            @media (prefers-color-scheme: dark) {{
+                                body {{
+                                    background: #1a1a1a;
+                                    color: #fff;
+                                }}
+                                th {{ background: #333; }}
+                                th, td {{ border-color: #444; }}
+                            }}
+                            @media (prefers-color-scheme: light) {{
+                                body {{
+                                    background: #fff;
+                                    color: #000;
+                                }}
+                                th {{ background: #f5f5f5; }}
+                                th, td {{ border-color: #ddd; }}
+                            }}
+                            table {{ 
+                                width: 100%; 
+                                border-collapse: collapse; 
+                                margin: 20px 0;
+                            }}
+                            th, td {{ 
+                                padding: 12px;
+                                border-width: 1px;
+                                border-style: solid;
+                                text-align: left; 
+                            }}
+                            .summary {{ margin-top: 20px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <h2>Team Compensation Report</h2>
+                        <table>
+                            <tr>
+                                <th>Name</th>
+                                <th>Loan Size</th>
+                                <th>Units</th>
+                                <th>Volume</th>
+                                <th>Current Comp</th>
+                                <th>ETHOS Before Cap</th>
+                                <th>ETHOS After Cap</th>
+                                <th>ETHOS Total</th>
+                            </tr>
+                            {''.join([f'''
+                            <tr>
+                                <td>{r['name']}</td>
+                                <td>${r['loan_size']:,.2f}</td>
+                                <td>{r['units']}</td>
+                                <td>${r['volume']:,.2f}</td>
+                                <td>${r['currentComp']:,.2f}</td>
+                                <td>${r['ethosBeforeCap']:,.2f}</td>
+                                <td>${r['ethosAfterCap']:,.2f}</td>
+                                <td>${r['ethosComp']:,.2f}</td>
+                            </tr>
+                            ''' for r in results])}
+                        </table>
+                        <div class="summary">
+                            <h3>Summary</h3>
+                            <p>Total Volume: ${sum(r['volume'] for r in results):,.2f}</p>
+                            <p>Total Current Compensation: ${sum(r['currentComp'] for r in results):,.2f}</p>
+                            <p>Total ETHOS Compensation: ${sum(r['ethosComp'] for r in results):,.2f}</p>
+                            <p>Additional Team Compensation with ETHOS: ${sum(r['ethosComp'] for r in results) - sum(r['currentComp'] for r in results):,.2f}</p>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    
+                    st.subheader("4. Team Compensation Report")
+                    components.html(html_content, height=800)
+                    
+                    st.download_button(
+                        label="💾 Download Team Report",
+                        data=html_content,
+                        file_name="team_report.html",
+                        mime="text/html"
+                    )
+                    
+            except Exception as e:
+                st.error(f"Error processing file: {str(e)}")
+                                # st.rerun()
 
 
