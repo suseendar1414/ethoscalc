@@ -714,11 +714,9 @@ else:  # Loan Advisor Compensation Calculator
             }),
             use_container_width=True
         )
+
     with tab3:
         st.title("Team Performance Dashboard")
-
-        if 'team_members' not in st.session_state:
-            st.session_state.team_members = []
         
         # Add current lender parameters input section
         st.subheader("Current Lender Parameters")
@@ -737,172 +735,134 @@ else:  # Loan Advisor Compensation Calculator
         ethos_after_upline = 0.0
         cap_units = 20
 
-        input_method = st.radio("Select Input Method", ["Add Single Member", "Add Multiple Members"], horizontal=True)
-            
-        if input_method == "Add Single Member":
-            with st.form("add_member_form", clear_on_submit=True):
-                name = st.text_input("Name")
-                loan_size = st.number_input("Loan Size", value=500000, step=1000)
-                units = st.number_input("Annual Units", value=50, step=1)
-                calculate = st.form_submit_button("Calculate")
-                submit = st.form_submit_button("Add Member")
-                
-                if calculate:
-                    before_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_before_upline, ethos_transaction_fee, min(units, cap_units))[1]
-                    after_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_after_upline, ethos_transaction_fee, max(0, units - cap_units))[1]
-                    ethos_total = before_cap_comp + after_cap_comp
-                    
-                    st.metric("Before Cap Compensation", f"${before_cap_comp:,.2f}")
-                    st.metric("After Cap Compensation", f"${after_cap_comp:,.2f}")
-                    st.metric("Total ETHOS Compensation", f"${ethos_total:,.2f}")
-                
-                if submit and name:
-                    before_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_before_upline, ethos_transaction_fee, min(units, cap_units))[1]
-                    after_cap_comp = calculate_compensation(loan_size, interest_rate, ethos_rebate, ethos_after_upline, ethos_transaction_fee, max(0, units - cap_units))[1]
-                    ethos_total = before_cap_comp + after_cap_comp
-                    
-                    st.session_state.team_members.append({
-                        "name": name,
-                        "loan_size": loan_size,
-                        "units": units,
-                        "volume": loan_size * units,
-                        "currentComp": calculate_compensation(loan_size, interest_rate, current_rebate, company_split, current_transaction_fee, units)[1],
-                        "ethosComp": ethos_total,
+        num_members = st.number_input("Number of Team Members", min_value=1, value=1, step=1)
+
+        members_data = []
+        for i in range(int(num_members)):
+            st.subheader(f"Member {i+1}")
+            cols = st.columns(3)
+            members_data.append({
+                "name": cols[0].text_input(f"Name {i+1}", key=f"name_{i}"),
+                "loan_size": cols[1].number_input(f"Loan Size {i+1}", value=500000, step=1000, key=f"loan_{i}"),
+                "units": cols[2].number_input(f"Units {i+1}", value=50, step=1, key=f"units_{i}")
+            })
+
+        if st.button("Calculate"):
+            results = []
+            for member in members_data:
+                if member["name"]:
+                    before_cap_comp = calculate_compensation(
+                        member["loan_size"], interest_rate, ethos_rebate,
+                        ethos_before_upline, ethos_transaction_fee,
+                        min(member["units"], cap_units))[1]
+
+                    after_cap_comp = calculate_compensation(
+                        member["loan_size"], interest_rate, ethos_rebate,
+                        ethos_after_upline, ethos_transaction_fee,
+                        max(0, member["units"] - cap_units))[1]
+
+                    results.append({
+                        "name": member["name"],
+                        "loan_size": member["loan_size"],
+                        "units": member["units"],
+                        "volume": member["loan_size"] * member["units"],
+                        "currentComp": calculate_compensation(
+                            member["loan_size"], interest_rate, current_rebate,
+                            company_split, current_transaction_fee, member["units"])[1],
+                        "ethosComp": before_cap_comp + after_cap_comp,
                         "ethosBeforeCap": before_cap_comp,
                         "ethosAfterCap": after_cap_comp
                     })
-                    st.success(f"Added {name} to team!")
-                    st.rerun()
 
-        elif input_method == "Add Multiple Members":
-            num_members = st.number_input("Number of Team Members", min_value=1, value=1, step=1)
-
-            members_data = []
-            for i in range(int(num_members)):
-                st.subheader(f"Member {i+1}")
-                cols = st.columns(3)
-                members_data.append({
-                    "name": cols[0].text_input(f"Name {i+1}", key=f"name_{i}"),
-                    "loan_size": cols[1].number_input(f"Loan Size {i+1}", value=500000, step=1000, key=f"loan_{i}"),
-                    "units": cols[2].number_input(f"Units {i+1}", value=50, step=1, key=f"units_{i}")
-                })
-
-            if st.button("Calculate"):
-                results = []
-                for member in members_data:
-                    if member["name"]:
-                        before_cap_comp = calculate_compensation(
-                            member["loan_size"], interest_rate, ethos_rebate,
-                            ethos_before_upline, ethos_transaction_fee,
-                            min(member["units"], cap_units))[1]
-
-                        after_cap_comp = calculate_compensation(
-                            member["loan_size"], interest_rate, ethos_rebate,
-                            ethos_after_upline, ethos_transaction_fee,
-                            max(0, member["units"] - cap_units))[1]
-
-                        results.append({
-                            "name": member["name"],
-                            "loan_size": member["loan_size"],
-                            "units": member["units"],
-                            "volume": member["loan_size"] * member["units"],
-                            "currentComp": calculate_compensation(
-                                member["loan_size"], interest_rate, current_rebate,
-                                company_split, current_transaction_fee, member["units"])[1],
-                            "ethosComp": before_cap_comp + after_cap_comp,
-                            "ethosBeforeCap": before_cap_comp,
-                            "ethosAfterCap": after_cap_comp
-                        })
-
-                if results:
-                    html_content = f"""
-                    <html>
-                    <head>
-                        <title>Team Compensation Report</title>
-                        <style>
-                            :root {{
-                                color-scheme: light dark;
+            if results:
+                html_content = f"""
+                <html>
+                <head>
+                    <title>Team Compensation Report</title>
+                    <style>
+                        :root {{
+                            color-scheme: light dark;
+                        }}
+                        body {{ 
+                            font-family: Arial, sans-serif; 
+                            padding: 20px;
+                        }}
+                        @media (prefers-color-scheme: dark) {{
+                            body {{
+                                background: #1a1a1a;
+                                color: #fff;
                             }}
-                            body {{ 
-                                font-family: Arial, sans-serif; 
-                                padding: 20px;
+                            th {{ background: #333; }}
+                            th, td {{ border-color: #444; }}
+                        }}
+                        @media (prefers-color-scheme: light) {{
+                            body {{
+                                background: #fff;
+                                color: #000;
                             }}
-                            @media (prefers-color-scheme: dark) {{
-                                body {{
-                                    background: #1a1a1a;
-                                    color: #fff;
-                                }}
-                                th {{ background: #333; }}
-                                th, td {{ border-color: #444; }}
-                            }}
-                            @media (prefers-color-scheme: light) {{
-                                body {{
-                                    background: #fff;
-                                    color: #000;
-                                }}
-                                th {{ background: #f5f5f5; }}
-                                th, td {{ border-color: #ddd; }}
-                            }}
-                            table {{ 
-                                width: 100%; 
-                                border-collapse: collapse; 
-                                margin: 20px 0;
-                            }}
-                            th, td {{ 
-                                padding: 12px;
-                                border-width: 1px;
-                                border-style: solid;
-                                text-align: left; 
-                            }}
-                            .summary {{ margin-top: 20px; }}
-                        </style>
-                    </head>
-                        <body>
-                            <h2>Team Compensation Report</h2>
-                            <table>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Loan Size</th>
-                                    <th>Units</th>
-                                    <th>Volume</th>
-                                    <th>Current Comp</th>
-                                    <th>ETHOS Before Cap</th>
-                                    <th>ETHOS After Cap</th>
-                                    <th>ETHOS Total</th>
-                                </tr>
-                                {''.join([f'''
-                                <tr>
-                                    <td>{r['name']}</td>
-                                    <td>${r['loan_size']:,.2f}</td>
-                                    <td>{r['units']}</td>
-                                    <td>${r['volume']:,.2f}</td>
-                                    <td>${r['currentComp']:,.2f}</td>
-                                    <td>${r['ethosBeforeCap']:,.2f}</td>
-                                    <td>${r['ethosAfterCap']:,.2f}</td>
-                                    <td>${r['ethosComp']:,.2f}</td>
-                                </tr>
-                                ''' for r in results])}
-                            </table>
-                            <div class="summary">
-                                <h3>Summary</h3>
-                                <p>Total Volume: ${sum(r['volume'] for r in results):,.2f}</p>
-                                <p>Total Current Compensation: ${sum(r['currentComp'] for r in results):,.2f}</p>
-                                <p>Total ETHOS Compensation: ${sum(r['ethosComp'] for r in results):,.2f}</p>
-                                <p>Additional Team Compensation with ETHOS: ${sum(r['ethosComp'] for r in results) - sum(r['currentComp'] for r in results):,.2f}</p>
-                            </div>
-                        </body>
-                    </html>
-                    """
+                            th {{ background: #f5f5f5; }}
+                            th, td {{ border-color: #ddd; }}
+                        }}
+                        table {{ 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin: 20px 0;
+                        }}
+                        th, td {{ 
+                            padding: 12px;
+                            border-width: 1px;
+                            border-style: solid;
+                            text-align: left; 
+                        }}
+                        .summary {{ margin-top: 20px; }}
+                    </style>
+                </head>
+                    <body>
+                        <h2>Team Compensation Report</h2>
+                        <table>
+                            <tr>
+                                <th>Name</th>
+                                <th>Loan Size</th>
+                                <th>Units</th>
+                                <th>Volume</th>
+                                <th>Current Comp</th>
+                                <th>ETHOS Before Cap</th>
+                                <th>ETHOS After Cap</th>
+                                <th>ETHOS Total</th>
+                            </tr>
+                            {''.join([f'''
+                            <tr>
+                                <td>{r['name']}</td>
+                                <td>${r['loan_size']:,.2f}</td>
+                                <td>{r['units']}</td>
+                                <td>${r['volume']:,.2f}</td>
+                                <td>${r['currentComp']:,.2f}</td>
+                                <td>${r['ethosBeforeCap']:,.2f}</td>
+                                <td>${r['ethosAfterCap']:,.2f}</td>
+                                <td>${r['ethosComp']:,.2f}</td>
+                            </tr>
+                            ''' for r in results])}
+                        </table>
+                        <div class="summary">
+                            <h3>Summary</h3>
+                            <p>Total Volume: ${sum(r['volume'] for r in results):,.2f}</p>
+                            <p>Total Current Compensation: ${sum(r['currentComp'] for r in results):,.2f}</p>
+                            <p>Total ETHOS Compensation: ${sum(r['ethosComp'] for r in results):,.2f}</p>
+                            <p>Additional Team Compensation with ETHOS: ${sum(r['ethosComp'] for r in results) - sum(r['currentComp'] for r in results):,.2f}</p>
+                        </div>
+                    </body>
+                </html>
+                """
 
-                    components.html(html_content, height=800)
+                components.html(html_content, height=800)
 
-                    st.download_button(
-                        label="Download Team Report",
-                        data=html_content,
-                        file_name="team_report.html",
-                        mime="text/html"
-                    )
-
+                st.download_button(
+                    label="Download Team Report",
+                    data=html_content,
+                    file_name="team_report.html",
+                    mime="text/html"
+                )
+                
     with tab4:
         st.title("Upload Team Data")
         
