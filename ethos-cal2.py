@@ -775,6 +775,46 @@ else:  # Loan Advisor Compensation Calculator
                     })
 
             if results:
+                fig = go.Figure()
+                comp_data = pd.DataFrame(results)
+                
+                fig.add_trace(go.Bar(
+                    name='Current Compensation',
+                    x=comp_data['name'],
+                    y=comp_data['currentComp'],
+                    marker_color='rgb(55, 83, 109)'
+                ))
+                
+                fig.add_trace(go.Bar(
+                    name='ETHOS Total',
+                    x=comp_data['name'],
+                    y=comp_data['ethosComp'],
+                    marker_color='rgb(0, 191, 255)'
+                ))
+                
+                fig.update_layout(
+                    title='Team Compensation Comparison',
+                    yaxis_title='Compensation ($)',
+                    barmode='group',
+                    showlegend=True,
+                    height=500
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Volume distribution pie chart
+                fig2 = go.Figure(data=[go.Pie(
+                    labels=comp_data['name'],
+                    values=comp_data['volume'],
+                    hole=.3
+                )])
+                
+                fig2.update_layout(
+                    title='Loan Volume Distribution',
+                    height=500
+                )
+                
+                st.plotly_chart(fig2, use_container_width=True)
                 html_content = f"""
                 <html>
                 <head>
@@ -862,183 +902,226 @@ else:  # Loan Advisor Compensation Calculator
                     file_name="team_report.html",
                     mime="text/html"
                 )
-                
+
     with tab4:
-        st.title("Upload Team Data")
-        
-        # Create template CSV
-        template_data = {
-            'Name': ['John Doe', 'Jane Smith'],
-            'Loan Size': [500000, 600000],
-            'Annual Units': [50, 45]
-        }
-        template_df = pd.DataFrame(template_data)
-        template_csv = template_df.to_csv(index=False)
-        
-        # Template download section
-        st.subheader("1. Download Template")
-        st.write("Your upload file should contain these columns:")
-        st.write("- **Name**: Team member's name")
-        st.write("- **Loan Size**: Average loan amount")
-        st.write("- **Annual Units**: Number of loans per year")
-        
-        st.download_button(
-            label="📥 Download Template CSV",
-            data=template_csv,
-            file_name="team_template.csv",
-            mime="text/csv"
-        )
-        
-        # Current lender parameters
-        st.subheader("2. Enter Current Lender Parameters")
-        current_cols = st.columns(3)
-        with current_cols[0]:
-            interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.75, step=0.125, key="upload_interest_rate")
-        with current_cols[1]:
-            current_rebate = st.number_input("Current Rebate (%)", min_value=0.0, value=1.0, step=0.1, key="upload_current_rebate")
-        with current_cols[2]:
-            current_transaction_fee = st.number_input("Current Transaction Fee ($)", min_value=0.0, value=0.0, step=1.0, key="upload_transaction_fee")
-        
-        # File upload
-        st.subheader("3. Upload Team Data")
-        uploaded_file = st.file_uploader("Choose a CSV file", type='csv')
-        
-        if uploaded_file is not None:
-            try:
-                df = pd.read_csv(uploaded_file)
-                required_columns = ['Name', 'Loan Size', 'Annual Units']
-                
-                if not all(col in df.columns for col in required_columns):
-                    st.error("Upload file must contain columns: Name, Loan Size, Annual Units")
-                else:
-                    # ETHOS parameters
-                    ethos_rebate = 1.70
-                    ethos_transaction_fee = 495
-                    ethos_before_upline = 0.25
-                    ethos_after_upline = 0.0
-                    cap_units = 20
+            st.title("Upload Team Data")
+            
+            # Create template CSV
+            template_data = {
+                'Name': ['John Doe', 'Jane Smith'],
+                'Loan Size': [500000, 600000],
+                'Annual Units': [50, 45]
+            }
+            template_df = pd.DataFrame(template_data)
+            template_csv = template_df.to_csv(index=False)
+            
+            # Template download section
+            st.subheader("1. Download Template")
+            st.write("Your upload file should contain these columns:")
+            st.write("- **Name**: Team member's name")
+            st.write("- **Loan Size**: Average loan amount")
+            st.write("- **Annual Units**: Number of loans per year")
+            
+            st.download_button(
+                label="📥 Download Template CSV",
+                data=template_csv,
+                file_name="team_template.csv",
+                mime="text/csv"
+            )
+            
+            # Current lender parameters
+            st.subheader("2. Enter Current Lender Parameters")
+            current_cols = st.columns(3)
+            with current_cols[0]:
+                interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=6.75, step=0.125, key="upload_interest_rate")
+            with current_cols[1]:
+                current_rebate = st.number_input("Current Rebate (%)", min_value=0.0, value=1.0, step=0.1, key="upload_current_rebate")
+            with current_cols[2]:
+                current_transaction_fee = st.number_input("Current Transaction Fee ($)", min_value=0.0, value=0.0, step=1.0, key="upload_transaction_fee")
+            
+            # File upload
+            st.subheader("3. Upload Team Data")
+            uploaded_file = st.file_uploader("Choose a CSV file", type='csv')
+            
+            if uploaded_file is not None:
+                try:
+                    df = pd.read_csv(uploaded_file)
+                    required_columns = ['Name', 'Loan Size', 'Annual Units']
                     
-                    # Calculate compensation for each team member
-                    results = []
-                    for _, row in df.iterrows():
-                        before_cap_comp = calculate_compensation(
-                            row['Loan Size'], interest_rate, ethos_rebate,
-                            ethos_before_upline, ethos_transaction_fee,
-                            min(row['Annual Units'], cap_units))[1]
-                            
-                        after_cap_comp = calculate_compensation(
-                            row['Loan Size'], interest_rate, ethos_rebate,
-                            ethos_after_upline, ethos_transaction_fee,
-                            max(0, row['Annual Units'] - cap_units))[1]
-                            
-                        current_comp = calculate_compensation(
-                            row['Loan Size'], interest_rate, current_rebate,
-                            company_split, current_transaction_fee,
-                            row['Annual Units'])[1]
-                            
-                        results.append({
-                            "name": row['Name'],
-                            "loan_size": row['Loan Size'],
-                            "units": row['Annual Units'],
-                            "volume": row['Loan Size'] * row['Annual Units'],
-                            "currentComp": current_comp,
-                            "ethosComp": before_cap_comp + after_cap_comp,
-                            "ethosBeforeCap": before_cap_comp,
-                            "ethosAfterCap": after_cap_comp
-                        })
-                    
-                    # Generate HTML report
-                    html_content = f"""
-                    <html>
-                    <head>
-                        <title>Team Compensation Report</title>
-                        <style>
-                            :root {{
-                                color-scheme: light dark;
-                            }}
-                            body {{ 
-                                font-family: Arial, sans-serif; 
-                                padding: 20px;
-                            }}
-                            @media (prefers-color-scheme: dark) {{
-                                body {{
-                                    background: #1a1a1a;
-                                    color: #fff;
+                    if not all(col in df.columns for col in required_columns):
+                        st.error("Upload file must contain columns: Name, Loan Size, Annual Units")
+                    else:
+                        # ETHOS parameters
+                        ethos_rebate = 1.70
+                        ethos_transaction_fee = 495
+                        ethos_before_upline = 0.25
+                        ethos_after_upline = 0.0
+                        cap_units = 20
+                        
+                        # Calculate compensation for each team member
+                        results = []
+                        for _, row in df.iterrows():
+                            before_cap_comp = calculate_compensation(
+                                row['Loan Size'], interest_rate, ethos_rebate,
+                                ethos_before_upline, ethos_transaction_fee,
+                                min(row['Annual Units'], cap_units))[1]
+                                
+                            after_cap_comp = calculate_compensation(
+                                row['Loan Size'], interest_rate, ethos_rebate,
+                                ethos_after_upline, ethos_transaction_fee,
+                                max(0, row['Annual Units'] - cap_units))[1]
+                                
+                            current_comp = calculate_compensation(
+                                row['Loan Size'], interest_rate, current_rebate,
+                                company_split, current_transaction_fee,
+                                row['Annual Units'])[1]
+                                
+                            results.append({
+                                "name": row['Name'],
+                                "loan_size": row['Loan Size'],
+                                "units": row['Annual Units'],
+                                "volume": row['Loan Size'] * row['Annual Units'],
+                                "currentComp": current_comp,
+                                "ethosComp": before_cap_comp + after_cap_comp,
+                                "ethosBeforeCap": before_cap_comp,
+                                "ethosAfterCap": after_cap_comp
+                            })
+                        
+                        # Create visualizations
+                        fig = go.Figure()
+                        
+                        # Compensation comparison chart
+                        comp_data = pd.DataFrame(results)
+                        fig.add_trace(go.Bar(
+                            name='Current Compensation',
+                            x=comp_data['name'],
+                            y=comp_data['currentComp'],
+                            marker_color='rgb(55, 83, 109)'
+                        ))
+                        
+                        fig.add_trace(go.Bar(
+                            name='ETHOS Total',
+                            x=comp_data['name'],
+                            y=comp_data['ethosComp'],
+                            marker_color='rgb(0, 191, 255)'
+                        ))
+                        
+                        fig.update_layout(
+                            title='Team Compensation Comparison',
+                            yaxis_title='Compensation ($)',
+                            barmode='group',
+                            showlegend=True,
+                            height=500
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Volume distribution pie chart
+                        fig2 = go.Figure(data=[go.Pie(
+                            labels=comp_data['name'],
+                            values=comp_data['volume'],
+                            hole=.3
+                        )])
+                        
+                        fig2.update_layout(
+                            title='Loan Volume Distribution',
+                            height=500
+                        )
+                        
+                        st.plotly_chart(fig2, use_container_width=True)
+
+                        # Generate HTML report
+                        html_content = f"""
+                        <html>
+                        <head>
+                            <title>Team Compensation Report</title>
+                            <style>
+                                :root {{
+                                    color-scheme: light dark;
                                 }}
-                                th {{ background: #333; }}
-                                th, td {{ border-color: #444; }}
-                            }}
-                            @media (prefers-color-scheme: light) {{
-                                body {{
-                                    background: #fff;
-                                    color: #000;
+                                body {{ 
+                                    font-family: Arial, sans-serif; 
+                                    padding: 20px;
                                 }}
-                                th {{ background: #f5f5f5; }}
-                                th, td {{ border-color: #ddd; }}
-                            }}
-                            table {{ 
-                                width: 100%; 
-                                border-collapse: collapse; 
-                                margin: 20px 0;
-                            }}
-                            th, td {{ 
-                                padding: 12px;
-                                border-width: 1px;
-                                border-style: solid;
-                                text-align: left; 
-                            }}
-                            .summary {{ margin-top: 20px; }}
-                        </style>
-                    </head>
-                    <body>
-                        <h2>Team Compensation Report</h2>
-                        <table>
-                            <tr>
-                                <th>Name</th>
-                                <th>Loan Size</th>
-                                <th>Units</th>
-                                <th>Volume</th>
-                                <th>Current Comp</th>
-                                <th>ETHOS Before Cap</th>
-                                <th>ETHOS After Cap</th>
-                                <th>ETHOS Total</th>
-                            </tr>
-                            {''.join([f'''
-                            <tr>
-                                <td>{r['name']}</td>
-                                <td>${r['loan_size']:,.2f}</td>
-                                <td>{r['units']}</td>
-                                <td>${r['volume']:,.2f}</td>
-                                <td>${r['currentComp']:,.2f}</td>
-                                <td>${r['ethosBeforeCap']:,.2f}</td>
-                                <td>${r['ethosAfterCap']:,.2f}</td>
-                                <td>${r['ethosComp']:,.2f}</td>
-                            </tr>
-                            ''' for r in results])}
-                        </table>
-                        <div class="summary">
-                            <h3>Summary</h3>
-                            <p>Total Volume: ${sum(r['volume'] for r in results):,.2f}</p>
-                            <p>Total Current Compensation: ${sum(r['currentComp'] for r in results):,.2f}</p>
-                            <p>Total ETHOS Compensation: ${sum(r['ethosComp'] for r in results):,.2f}</p>
-                            <p>Additional Team Compensation with ETHOS: ${sum(r['ethosComp'] for r in results) - sum(r['currentComp'] for r in results):,.2f}</p>
-                        </div>
-                    </body>
-                    </html>
-                    """
-                    
-                    st.subheader("4. Team Compensation Report")
-                    components.html(html_content, height=800)
-                    
-                    st.download_button(
-                        label="💾 Download Team Report",
-                        data=html_content,
-                        file_name="team_report.html",
-                        mime="text/html"
-                    )
-                    
-            except Exception as e:
-                st.error(f"Error processing file: {str(e)}")
+                                @media (prefers-color-scheme: dark) {{
+                                    body {{
+                                        background: #1a1a1a;
+                                        color: #fff;
+                                    }}
+                                    th {{ background: #333; }}
+                                    th, td {{ border-color: #444; }}
+                                }}
+                                @media (prefers-color-scheme: light) {{
+                                    body {{
+                                        background: #fff;
+                                        color: #000;
+                                    }}
+                                    th {{ background: #f5f5f5; }}
+                                    th, td {{ border-color: #ddd; }}
+                                }}
+                                table {{ 
+                                    width: 100%; 
+                                    border-collapse: collapse; 
+                                    margin: 20px 0;
+                                }}
+                                th, td {{ 
+                                    padding: 12px;
+                                    border-width: 1px;
+                                    border-style: solid;
+                                    text-align: left; 
+                                }}
+                                .summary {{ margin-top: 20px; }}
+                            </style>
+                        </head>
+                        <body>
+                            <h2>Team Compensation Report</h2>
+                            <table>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Loan Size</th>
+                                    <th>Units</th>
+                                    <th>Volume</th>
+                                    <th>Current Comp</th>
+                                    <th>ETHOS Before Cap</th>
+                                    <th>ETHOS After Cap</th>
+                                    <th>ETHOS Total</th>
+                                </tr>
+                                {''.join([f'''
+                                <tr>
+                                    <td>{r['name']}</td>
+                                    <td>${r['loan_size']:,.2f}</td>
+                                    <td>{r['units']}</td>
+                                    <td>${r['volume']:,.2f}</td>
+                                    <td>${r['currentComp']:,.2f}</td>
+                                    <td>${r['ethosBeforeCap']:,.2f}</td>
+                                    <td>${r['ethosAfterCap']:,.2f}</td>
+                                    <td>${r['ethosComp']:,.2f}</td>
+                                </tr>
+                                ''' for r in results])}
+                            </table>
+                            <div class="summary">
+                                <h3>Summary</h3>
+                                <p>Total Volume: ${sum(r['volume'] for r in results):,.2f}</p>
+                                <p>Total Current Compensation: ${sum(r['currentComp'] for r in results):,.2f}</p>
+                                <p>Total ETHOS Compensation: ${sum(r['ethosComp'] for r in results):,.2f}</p>
+                                <p>Additional Team Compensation with ETHOS: ${sum(r['ethosComp'] for r in results) - sum(r['currentComp'] for r in results):,.2f}</p>
+                            </div>
+                        </body>
+                        </html>
+                        """
+                        
+                        st.subheader("4. Team Compensation Report")
+                        components.html(html_content, height=800)
+                        
+                        st.download_button(
+                            label="💾 Download Team Report",
+                            data=html_content,
+                            file_name="team_report.html",
+                            mime="text/html"
+                        )
+                        
+                except Exception as e:
+                    st.error(f"Error processing file: {str(e)}")
                                 # st.rerun()
 
 
